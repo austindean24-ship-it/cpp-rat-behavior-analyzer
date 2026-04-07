@@ -10,43 +10,7 @@ import cv2
 import numpy as np
 import streamlit as st
 from PIL import Image
-from canvas_utils import st_canvas_fixed as st_canvas
-
-# `streamlit-drawable-canvas` still expects `streamlit.elements.image.image_to_url`,
-# but newer Streamlit versions moved that helper. This shim keeps the drawing widget
-# working without asking the user to edit packages by hand.
-try:
-    import streamlit.elements.image as _st_image_module
-
-    if not hasattr(_st_image_module, "image_to_url"):
-        from streamlit.elements.lib.image_utils import image_to_url as _image_to_url
-        from streamlit.elements.lib.layout_utils import LayoutConfig as _LayoutConfig
-
-        def _compat_image_to_url(
-            image,
-            width_or_layout_config=None,
-            clamp: bool = False,
-            channels: str = "RGB",
-            output_format: str = "auto",
-            image_id: str | None = None,
-        ) -> str:
-            if hasattr(width_or_layout_config, "width"):
-                layout_config = width_or_layout_config
-            else:
-                layout_width = int(width_or_layout_config) if isinstance(width_or_layout_config, int) else width_or_layout_config
-                layout_config = _LayoutConfig(width=layout_width)
-            return _image_to_url(
-                image,
-                layout_config,
-                clamp,
-                channels,
-                output_format,
-                image_id or "",
-            )
-
-        _st_image_module.image_to_url = _compat_image_to_url
-except Exception:
-    pass
+from streamlit_cropper import st_cropper
 
 from analysis import create_analysis_bundle
 from demo_generator import generate_synthetic_cpp_video
@@ -61,8 +25,7 @@ from io_utils import (
 )
 from regions import (
     ArenaCalibration,
-    build_calibration_from_canvas_box,
-    build_calibration_from_canvas_polygons,
+    build_calibration_from_rectangle_boxes,
     draw_calibration_overlay,
 )
 from tracker import SingleRatTracker, TrackingConfig
@@ -101,17 +64,6 @@ def load_video_into_session(video_path: Path, signature: str) -> None:
 def frame_to_pil(frame: np.ndarray) -> Image.Image:
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     return Image.fromarray(rgb_frame)
-
-
-def resize_for_canvas(frame, max_width: int = 900) -> tuple[Image.Image, float, float]:
-    height, width = frame.shape[:2]
-    display_width = min(max_width, width)
-    scale = width / display_width if display_width else 1.0
-    display_height = int(round(height / scale))
-    image = frame_to_pil(frame).resize((display_width, display_height))
-    scale_x = width / display_width
-    scale_y = height / display_height
-    return image, scale_x, scale_y
 
 
 def calibration_signature(calibration: ArenaCalibration | None) -> str:
@@ -693,7 +645,8 @@ div[data-testid="stCaptionContainer"] p {{
     font-size: 0.86rem;
 }}
 
-iframe[title="streamlit_drawable_canvas.st_canvas"] {{
+iframe[title="streamlit_drawable_canvas.st_canvas"],
+iframe[title="streamlit_cropper.st_cropper"] {{
     border-radius: 20px;
     border: 1px solid rgba(207, 189, 172, 0.9);
     box-shadow: inset 0 0 0 1px rgba(255,255,255,0.8), var(--lab-shadow-soft);
@@ -923,7 +876,7 @@ def render_sidebar_help() -> None:
   <div class="lab-sidebar-title">How To Use This App</div>
   <ol class="lab-sidebar-list">
     <li>Upload one rat video, or create the synthetic demo video.</li>
-    <li>Draw the apparatus on the first frame.</li>
+    <li>Draw the 3 chamber boxes on the first frame.</li>
     <li>Click <strong>Run analysis</strong>.</li>
     <li>Review the tables, CSV files, and optional annotated video.</li>
   </ol>
@@ -946,33 +899,17 @@ def show_metadata(metadata) -> None:
         st.info(note)
 
 
-def calibration_from_canvas(
-    mode: str,
-    canvas_json,
-    metadata,
-    scale_x: float,
-    scale_y: float,
-    boundary_margin_px: float,
-) -> ArenaCalibration | None:
-    if not canvas_json or not canvas_json.get("objects"):
-        return None
-    if mode == "Split one arena box into left / center / right (Recommended)":
-        return build_calibration_from_canvas_box(
-            canvas_json=canvas_json,
-            frame_width=metadata.width,
-            frame_height=metadata.height,
-            image_scale_x=scale_x,
-            image_scale_y=scale_y,
-            boundary_margin_px=boundary_margin_px,
-        )
-    return build_calibration_from_canvas_polygons(
-        canvas_json=canvas_json,
-        frame_width=metadata.width,
-        frame_height=metadata.height,
-        image_scale_x=scale_x,
-        image_scale_y=scale_y,
-        boundary_margin_px=boundary_margin_px,
-    )
+def default_chamber_box(frame_width: int, frame_height: int, chamber_index: int) -> tuple[int, int, int, int]:
+    left_margin = int(frame_width * 0.16)
+    top_margin = int(frame_height * 0.20)
+    arena_width = max(int(frame_width * 0.68), 30)
+    arena_height = max(int(frame_height * 0.36), 30)
+    chamber_width = max(int(arena_width / 3), 20)
+    x1 = left_margin + (chamber_index * chamber_width)
+    x2 = x1 + chamber_width
+    y1 = top_margin
+    y2 = top_margin + arena_height
+    return (x1, x2, y1, y2)
 
 
 def analysis_output_dir(video_path: Path) -> Path:
@@ -1102,12 +1039,12 @@ def main() -> None:
         else:
             st.caption(f"Using video FPS: {metadata.fps:.3f}")
 
-    frame_image, scale_x, scale_y = resize_for_canvas(first_frame)
+    frame_image = frame_to_pil(first_frame)
     with st.container(border=True):
         render_section_header(
             "Step 2",
             "Define chambers",
-            "Draw the arena on the first frame.",
+            "Drag one box for each chamber.",
         )
 
         boundary_margin_px = st.number_input(
@@ -1117,60 +1054,42 @@ def main() -> None:
             value=0,
             help="0 means no boundary zone. Values above 0 can label border frames as boundary.",
         )
+        st.caption("Draw the left, center, and right chambers with simple click-and-drag boxes.")
+        st.info("Each box starts with a rough guess. Drag it to fit the chamber before running analysis.")
 
-        mode = st.radio(
-            "Choose the chamber setup method",
-            options=[
-                "Split one arena box into left / center / right (Recommended)",
-                "Draw 3 chamber rectangles manually (Easy)",
-                "Draw 3 chamber polygons manually (Advanced)",
-            ],
-            horizontal=False,
-        )
-
-        if mode == "Split one arena box into left / center / right (Recommended)":
-            drawing_mode = "rect"
-            st.caption("Draw one rectangle around the full apparatus.")
-        elif mode == "Draw 3 chamber rectangles manually (Easy)":
-            drawing_mode = "rect"
-            st.caption("Draw 3 rectangles. They will be sorted left to right.")
-        else:
-            drawing_mode = "polygon"
-            st.caption("Draw exactly 3 polygons.")
-            st.info(
-                "Click to add points. Double-click to finish a shape. If this feels awkward, use chamber rectangles instead."
-            )
-
-        reset_col, image_col = st.columns([1, 4])
-        if reset_col.button("Clear drawing"):
+        if st.button("Clear chamber boxes"):
             clear_run_state()
             st.rerun()
 
-        canvas_result = image_col.empty()
-        canvas = canvas_result.container()
-        with canvas:
-            canvas_data = st_canvas(
-                fill_color="rgba(255, 0, 0, 0.12)",
-                stroke_width=3,
-                stroke_color="#ff5a36",
-                background_image=frame_image,
-                update_streamlit=True,
-                height=frame_image.height,
-                width=frame_image.width,
-                drawing_mode=drawing_mode,
-                point_display_radius=5,
-                key=f"canvas_{st.session_state['canvas_reset_counter']}_{drawing_mode}_{video_path.stem}",
-            )
+        chamber_specs = [
+            ("Left chamber", "#d16a57"),
+            ("Center chamber", "#548a78"),
+            ("Right chamber", "#6478c8"),
+        ]
+        crop_boxes: list[dict[str, int]] = []
+        tabs = st.tabs([label for label, _ in chamber_specs])
+        for chamber_index, ((label, color), tab) in enumerate(zip(chamber_specs, tabs, strict=False)):
+            with tab:
+                st.caption(f"Drag the box until it covers the {label.lower()}.")
+                crop_box = st_cropper(
+                    frame_image,
+                    realtime_update=True,
+                    default_coords=default_chamber_box(metadata.width, metadata.height, chamber_index),
+                    box_color=color,
+                    aspect_ratio=None,
+                    return_type="box",
+                    stroke_width=3,
+                    key=f"cropper_{st.session_state['canvas_reset_counter']}_{chamber_index}_{video_path.stem}",
+                )
+                crop_boxes.append(crop_box)
 
     calibration: ArenaCalibration | None = None
-    if canvas_data.json_data and canvas_data.json_data.get("objects"):
+    if len(crop_boxes) == 3:
         try:
-            calibration = calibration_from_canvas(
-                mode=mode,
-                canvas_json=canvas_data.json_data,
-                metadata=metadata,
-                scale_x=scale_x,
-                scale_y=scale_y,
+            calibration = build_calibration_from_rectangle_boxes(
+                boxes=crop_boxes,
+                frame_width=metadata.width,
+                frame_height=metadata.height,
                 boundary_margin_px=float(boundary_margin_px),
             )
             preview = draw_calibration_overlay(first_frame.copy(), calibration)

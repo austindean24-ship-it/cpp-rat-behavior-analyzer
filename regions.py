@@ -265,6 +265,45 @@ def build_calibration_from_canvas_polygons(
     )
 
 
+def build_calibration_from_rectangle_boxes(
+    boxes: Sequence[Mapping[str, float | int]],
+    frame_width: int,
+    frame_height: int,
+    boundary_margin_px: float = 0.0,
+) -> ArenaCalibration:
+    """Build a three-chamber calibration from 3 rectangle boxes.
+
+    Each box should provide `left`, `top`, `width`, and `height` in original
+    video-frame pixel coordinates. The final chambers are sorted left to right.
+    """
+
+    if len(boxes) != 3:
+        raise ValueError("Draw exactly 3 chamber rectangles on the frame.")
+
+    polygons: list[np.ndarray] = []
+    for box in boxes:
+        x = float(box.get("left", 0.0))
+        y = float(box.get("top", 0.0))
+        width = float(box.get("width", 0.0))
+        height = float(box.get("height", 0.0))
+        if width <= 0 or height <= 0:
+            raise ValueError("Each chamber rectangle needs a positive width and height.")
+        polygons.append(rectangle_to_polygon(x, y, width, height))
+
+    sorted_polygons = sorted(polygons, key=lambda item: float(np.mean(item[:, 0])))
+    chambers = [
+        _make_chamber(name, polygon)
+        for name, polygon in zip(DEFAULT_CHAMBER_ORDER, sorted_polygons)
+    ]
+    return ArenaCalibration(
+        chambers=chambers,
+        frame_width=frame_width,
+        frame_height=frame_height,
+        boundary_margin_px=boundary_margin_px,
+        metadata={"mode": "manual_rectangles"},
+    )
+
+
 def assign_point_to_chamber(
     point: tuple[float, float] | None,
     calibration: ArenaCalibration,
