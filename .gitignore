@@ -1,0 +1,15 @@
+.DS_Store
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+
+runtime_data/
+demo_outputs/
+demo_outputs_check/
+demo_outputs_check2/
+demo_outputs_quick/
+
+*.pyc
+*.pyo
+*.pyd
