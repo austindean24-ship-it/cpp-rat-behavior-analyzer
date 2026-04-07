@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 import streamlit as st
 from PIL import Image
-from streamlit_cropper import st_cropper
+from canvas_utils import st_canvas_fixed as st_canvas
 
 from analysis import create_analysis_bundle
 from demo_generator import generate_synthetic_cpp_video
@@ -25,7 +25,7 @@ from io_utils import (
 )
 from regions import (
     ArenaCalibration,
-    build_calibration_from_rectangle_boxes,
+    build_calibration_from_canvas_polygons,
     draw_calibration_overlay,
 )
 from tracker import SingleRatTracker, TrackingConfig
@@ -44,8 +44,6 @@ def ensure_session_state() -> None:
         "video_signature": None,
         "analysis_results": None,
         "canvas_reset_counter": 0,
-        "chamber_boxes": None,
-        "active_chamber_label": "Left chamber",
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -54,8 +52,6 @@ def ensure_session_state() -> None:
 def clear_run_state() -> None:
     st.session_state["analysis_results"] = None
     st.session_state["canvas_reset_counter"] = st.session_state.get("canvas_reset_counter", 0) + 1
-    st.session_state["chamber_boxes"] = None
-    st.session_state["active_chamber_label"] = "Left chamber"
 
 
 def load_video_into_session(video_path: Path, signature: str) -> None:
@@ -68,6 +64,17 @@ def load_video_into_session(video_path: Path, signature: str) -> None:
 def frame_to_pil(frame: np.ndarray) -> Image.Image:
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     return Image.fromarray(rgb_frame)
+
+
+def resize_for_canvas(frame: np.ndarray, max_width: int = 900) -> tuple[Image.Image, float, float]:
+    height, width = frame.shape[:2]
+    display_width = min(max_width, width)
+    scale = width / display_width if display_width else 1.0
+    display_height = int(round(height / scale))
+    image = frame_to_pil(frame).resize((display_width, display_height))
+    scale_x = width / display_width
+    scale_y = height / display_height
+    return image, scale_x, scale_y
 
 
 def calibration_signature(calibration: ArenaCalibration | None) -> str:
@@ -649,8 +656,7 @@ div[data-testid="stCaptionContainer"] p {{
     font-size: 0.86rem;
 }}
 
-iframe[title="streamlit_drawable_canvas.st_canvas"],
-iframe[title="streamlit_cropper.st_cropper"] {{
+iframe[title*="st_canvas"] {{
     border-radius: 20px;
     border: 1px solid rgba(207, 189, 172, 0.9);
     box-shadow: inset 0 0 0 1px rgba(255,255,255,0.8), var(--lab-shadow-soft);
@@ -902,32 +908,6 @@ def show_metadata(metadata) -> None:
     for note in metadata.notes:
         st.info(note)
 
-
-def default_chamber_box(frame_width: int, frame_height: int, chamber_index: int) -> tuple[int, int, int, int]:
-    left_margin = int(frame_width * 0.16)
-    top_margin = int(frame_height * 0.20)
-    arena_width = max(int(frame_width * 0.68), 30)
-    arena_height = max(int(frame_height * 0.36), 30)
-    chamber_width = max(int(arena_width / 3), 20)
-    x1 = left_margin + (chamber_index * chamber_width)
-    x2 = x1 + chamber_width
-    y1 = top_margin
-    y2 = top_margin + arena_height
-    return (x1, x2, y1, y2)
-
-
-def initialize_chamber_boxes(frame_width: int, frame_height: int) -> list[dict[str, int]]:
-    return [
-        {
-            "left": coords[0],
-            "top": coords[2],
-            "width": coords[1] - coords[0],
-            "height": coords[3] - coords[2],
-        }
-        for coords in (default_chamber_box(frame_width, frame_height, index) for index in range(3))
-    ]
-
-
 def analysis_output_dir(video_path: Path) -> Path:
     stamp = time.strftime("%Y%m%d_%H%M%S")
     return ensure_directory(RESULTS_DIR / f"{video_path.stem}_{stamp}")
@@ -1055,12 +1035,12 @@ def main() -> None:
         else:
             st.caption(f"Using video FPS: {metadata.fps:.3f}")
 
-    frame_image = frame_to_pil(first_frame)
+    frame_image, scale_x, scale_y = resize_for_canvas(first_frame)
     with st.container(border=True):
         render_section_header(
             "Step 2",
             "Define chambers",
-            "Drag one box for each chamber.",
+            "Draw one box for each chamber on the same image.",
         )
 
         boundary_margin_px = st.number_input(
@@ -1070,68 +1050,35 @@ def main() -> None:
             value=0,
             help="0 means no boundary zone. Values above 0 can label border frames as boundary.",
         )
-        st.caption("Draw the left, center, and right chambers with simple click-and-drag boxes.")
-        st.info("Each box starts with a rough guess. Drag it to fit the chamber before running analysis.")
+        st.caption("Draw exactly 3 rectangles: left, center, and right.")
+        st.info("Use the rectangle tool and draw the 3 chamber boxes on this one image.")
 
-        if st.button("Clear chamber boxes"):
+        if st.button("Clear drawing"):
             clear_run_state()
             st.rerun()
 
-        chamber_specs = [
-            ("Left chamber", "#d16a57"),
-            ("Center chamber", "#548a78"),
-            ("Right chamber", "#6478c8"),
-        ]
-        if (
-            st.session_state.get("chamber_boxes") is None
-            or not isinstance(st.session_state.get("chamber_boxes"), list)
-            or len(st.session_state["chamber_boxes"]) != 3
-        ):
-            st.session_state["chamber_boxes"] = initialize_chamber_boxes(metadata.width, metadata.height)
-
-        selected_label = st.radio(
-            "Choose chamber to edit",
-            options=[label for label, _ in chamber_specs],
-            horizontal=True,
-            key="active_chamber_label",
-            label_visibility="collapsed",
-        )
-        active_index = [label for label, _ in chamber_specs].index(selected_label)
-        active_color = chamber_specs[active_index][1]
-        active_box = st.session_state["chamber_boxes"][active_index]
-        default_coords = (
-            int(active_box["left"]),
-            int(active_box["left"] + active_box["width"]),
-            int(active_box["top"]),
-            int(active_box["top"] + active_box["height"]),
-        )
-
-        st.caption(f"Drag the box until it covers the {selected_label.lower()}.")
-        crop_box = st_cropper(
-            frame_image,
-            realtime_update=True,
-            default_coords=default_coords,
-            box_color=active_color,
-            aspect_ratio=None,
-            return_type="box",
+        canvas_data = st_canvas(
+            fill_color="rgba(255, 90, 54, 0.12)",
             stroke_width=3,
-            key=f"cropper_{st.session_state['canvas_reset_counter']}_{active_index}_{video_path.stem}",
+            stroke_color="#d16a57",
+            background_image=frame_image,
+            update_streamlit=True,
+            height=frame_image.height,
+            width=frame_image.width,
+            drawing_mode="rect",
+            point_display_radius=5,
+            key=f"canvas_{st.session_state['canvas_reset_counter']}_{video_path.stem}",
         )
-        st.session_state["chamber_boxes"][active_index] = {
-            "left": int(crop_box["left"]),
-            "top": int(crop_box["top"]),
-            "width": int(crop_box["width"]),
-            "height": int(crop_box["height"]),
-        }
-        crop_boxes = st.session_state["chamber_boxes"]
 
     calibration: ArenaCalibration | None = None
-    if len(crop_boxes) == 3:
+    if canvas_data.json_data and canvas_data.json_data.get("objects"):
         try:
-            calibration = build_calibration_from_rectangle_boxes(
-                boxes=crop_boxes,
+            calibration = build_calibration_from_canvas_polygons(
+                canvas_json=canvas_data.json_data,
                 frame_width=metadata.width,
                 frame_height=metadata.height,
+                image_scale_x=scale_x,
+                image_scale_y=scale_y,
                 boundary_margin_px=float(boundary_margin_px),
             )
             preview = draw_calibration_overlay(first_frame.copy(), calibration)
