@@ -829,8 +829,7 @@ def render_lab_hero() -> None:
     <div class="lab-hero__eyebrow">Internal Research Tool</div>
     <h1 class="lab-hero__title">Three-Chamber CPP Rat Behavior Analyzer</h1>
     <p class="lab-hero__copy">
-      A polished local workflow for fixed-camera CPP videos, designed for day-to-day lab use with clean exports,
-      quality-control summaries, and subtle research-minded guidance throughout the analysis flow.
+      Track one fixed-camera CPP video, review QC, and export results.
     </p>
     <div class="lab-badges">
       <span class="lab-badge">Single-rat tracking</span>
@@ -841,15 +840,15 @@ def render_lab_hero() -> None:
   <div class="lab-hero__meta">
     <div class="lab-hero__stat">
       <div class="lab-hero__stat-label">Workflow</div>
-      <div class="lab-hero__stat-value">Upload, map chambers, track, review, export</div>
+      <div class="lab-hero__stat-value">Upload, draw, run, export</div>
     </div>
     <div class="lab-hero__stat">
-      <div class="lab-hero__stat-label">Designed for</div>
-      <div class="lab-hero__stat-value">Fixed apparatus, single Sprague Dawley-style rat videos</div>
+      <div class="lab-hero__stat-label">Video type</div>
+      <div class="lab-hero__stat-value">Single rat, fixed apparatus</div>
     </div>
     <div class="lab-hero__stat">
-      <div class="lab-hero__stat-label">Visual tone</div>
-      <div class="lab-hero__stat-value">Warm, clean, subtle lab aesthetic with zero workflow changes</div>
+      <div class="lab-hero__stat-label">Outputs</div>
+      <div class="lab-hero__stat-value">Summary, QC, CSV, annotated MP4</div>
     </div>
   </div>
 </section>
@@ -858,13 +857,14 @@ def render_lab_hero() -> None:
     )
 
 
-def render_section_header(step_label: str, title: str, description: str) -> None:
+def render_section_header(step_label: str, title: str, description: str | None = None) -> None:
+    description_html = f'<p class="lab-section-copy">{html.escape(description)}</p>' if description else ""
     st.markdown(
         f"""
 <div class="lab-section-header">
   <div class="lab-section-step">{html.escape(step_label)}</div>
   <h2 class="lab-section-title">{html.escape(title)}</h2>
-  <p class="lab-section-copy">{html.escape(description)}</p>
+  {description_html}
 </div>
 """,
         unsafe_allow_html=True,
@@ -876,16 +876,10 @@ def render_empty_state() -> None:
         """
 <section class="lab-empty-state">
   <div>
-    <h3 class="lab-empty-state__title">Ready for a new assay run</h3>
+    <h3 class="lab-empty-state__title">Start a new run</h3>
     <p class="lab-empty-state__copy">
-      Upload a top-down CPP video or generate the synthetic demo to test the full interface. Nothing about the
-      tracking workflow changes here; this is simply the cleanest place to begin.
+      Upload a CPP video or create the demo video. Easiest setup: draw one arena box and split it into thirds.
     </p>
-    <ul class="lab-empty-state__list">
-      <li>Use a fixed-camera recording whenever possible.</li>
-      <li>The simplest chamber setup is one arena box split into thirds.</li>
-      <li>Local and Streamlit versions now share the same visual styling.</li>
-    </ul>
   </div>
   <div class="lab-empty-state__art" aria-hidden="true"></div>
 </section>
@@ -896,16 +890,15 @@ def render_empty_state() -> None:
 
 def render_results_highlights(results: dict, chamber_seconds_total: float) -> None:
     warning_count = len(results.get("warnings", []))
-    output_folder = Path(results["output_dir"]).name
     st.markdown(
         f"""
 <div class="lab-results-strip">
   <div class="lab-results-card">
-    <div class="lab-results-card__label">Combined chamber time</div>
+    <div class="lab-results-card__label">Chamber time</div>
     <div class="lab-results-card__value lab-results-card__value--accent">{chamber_seconds_total:.3f} seconds</div>
   </div>
   <div class="lab-results-card">
-    <div class="lab-results-card__label">Timing FPS used</div>
+    <div class="lab-results-card__label">Timing FPS</div>
     <div class="lab-results-card__value">{results['fps_for_timing']:.3f}</div>
   </div>
   <div class="lab-results-card">
@@ -913,8 +906,8 @@ def render_results_highlights(results: dict, chamber_seconds_total: float) -> No
     <div class="lab-results-card__value">{html.escape(results['assignment_point_mode'])}</div>
   </div>
   <div class="lab-results-card">
-    <div class="lab-results-card__label">Warnings raised</div>
-    <div class="lab-results-card__value">{warning_count} | {html.escape(output_folder)}</div>
+    <div class="lab-results-card__label">Warnings</div>
+    <div class="lab-results-card__value">{warning_count}</div>
   </div>
 </div>
 """,
@@ -928,9 +921,6 @@ def render_sidebar_help() -> None:
 <div class="lab-sidebar-panel">
   <div class="lab-sidebar-kicker">Lab workflow</div>
   <div class="lab-sidebar-title">How To Use This App</div>
-  <p class="lab-sidebar-copy">
-    The workflow stays exactly the same. The interface is just cleaner, calmer, and easier to scan during daily lab use.
-  </p>
   <ol class="lab-sidebar-list">
     <li>Upload one rat video, or create the synthetic demo video.</li>
     <li>Draw the apparatus on the first frame.</li>
@@ -938,7 +928,7 @@ def render_sidebar_help() -> None:
     <li>Review the tables, CSV files, and optional annotated video.</li>
   </ol>
   <div class="lab-sidebar-note">
-    Best starting point: draw one arena box and let the app split it into left, center, and right chambers.
+    Best starting point: draw one arena box and split it into thirds.
   </div>
 </div>
 """,
@@ -1045,19 +1035,19 @@ def main() -> None:
         render_section_header(
             "Step 1",
             "Pick a video",
-            "Upload one fixed-camera CPP recording or generate the synthetic demo. This section only changes presentation, not the upload workflow itself.",
+            "Upload a video or use the demo.",
         )
         uploaded_file = st.file_uploader(
             "Upload one top-down or near top-down video",
             type=["mp4", "mov", "avi", "m4v"],
-            help="If you are new to the app, try the synthetic demo first. It gives you a fake practice video.",
+            help="New here? Try the demo video first.",
         )
 
         demo_col, clear_col = st.columns([1, 1])
         if demo_col.button("Create demo video for practice"):
             demo_files = generate_synthetic_cpp_video(DEMO_DIR)
             load_video_into_session(Path(demo_files["video_path"]), signature=f"demo::{demo_files['video_path']}")
-            st.success("Practice video created. The app loaded it for you.")
+            st.success("Demo video created and loaded.")
 
         if clear_col.button("Forget current analysis"):
             st.session_state["video_path"] = None
@@ -1080,8 +1070,8 @@ def main() -> None:
     with st.container(border=True):
         render_section_header(
             "Video Snapshot",
-            "Check the recording details",
-            "Confirm the dimensions, FPS, and duration before moving on. These values are unchanged from the original app, only presented more clearly.",
+            "Video details",
+            "Check FPS, duration, and size.",
         )
         show_metadata(metadata)
 
@@ -1089,12 +1079,12 @@ def main() -> None:
         render_section_header(
             "Step 1B",
             "Time conversion",
-            "If your total chamber time looks too long or too short, the most common reason is incorrect FPS metadata in the video file.",
+            "Override FPS only if timing looks wrong.",
         )
         use_manual_fps = st.checkbox(
             "Use a manual FPS value for timing",
             value=False,
-            help="Only change this if the reported total time obviously does not match the real video length.",
+            help="Use this only if the reported video time is clearly wrong.",
         )
         fps_for_timing = float(metadata.fps)
         if use_manual_fps:
@@ -1105,19 +1095,19 @@ def main() -> None:
                     max_value=240.0,
                     value=float(metadata.fps),
                     step=0.1,
-                    help="Example: if the file says 15 FPS but the recording system actually used 30 FPS, type 30 here.",
+                    help="Example: if the file says 15 FPS but the camera really used 30 FPS, enter 30.",
                 )
             )
-            st.info(f"The app will use {fps_for_timing:.3f} FPS for the time calculations.")
+            st.info(f"Using {fps_for_timing:.3f} FPS for timing.")
         else:
-            st.caption(f"The app will use the video's reported FPS: {metadata.fps:.3f}")
+            st.caption(f"Using video FPS: {metadata.fps:.3f}")
 
     frame_image, scale_x, scale_y = resize_for_canvas(first_frame)
     with st.container(border=True):
         render_section_header(
             "Step 2",
-            "Define the three chambers",
-            "Use the first frame as your calibration surface. The drawing behavior is unchanged; this section now just has cleaner hierarchy and more breathing room.",
+            "Define chambers",
+            "Draw the arena on the first frame.",
         )
 
         boundary_margin_px = st.number_input(
@@ -1125,7 +1115,7 @@ def main() -> None:
             min_value=0,
             max_value=50,
             value=0,
-            help="Use 0 for the simplest rule. If you enter a value larger than 0, frames very close to shared borders can be labeled as boundary.",
+            help="0 means no boundary zone. Values above 0 can label border frames as boundary.",
         )
 
         mode = st.radio(
@@ -1140,16 +1130,15 @@ def main() -> None:
 
         if mode == "Split one arena box into left / center / right (Recommended)":
             drawing_mode = "rect"
-            st.caption("Draw one rectangle around the full apparatus. The app will split it into 3 equal-width chambers.")
+            st.caption("Draw one rectangle around the full apparatus.")
         elif mode == "Draw 3 chamber rectangles manually (Easy)":
             drawing_mode = "rect"
-            st.caption("Draw 3 separate rectangles, one per chamber. Draw left first if you want, but the app will still sort them from left to right automatically.")
+            st.caption("Draw 3 rectangles. They will be sorted left to right.")
         else:
             drawing_mode = "polygon"
-            st.caption("Draw exactly 3 polygons. This is the least beginner-friendly mode because the drawing widget can be finicky.")
+            st.caption("Draw exactly 3 polygons.")
             st.info(
-                "Polygon tip: click to add corner points, then double-click near the end to finish one shape. "
-                "If that feels frustrating, switch to 'Draw 3 chamber rectangles manually (Easy)'."
+                "Click to add points. Double-click to finish a shape. If this feels awkward, use chamber rectangles instead."
             )
 
         reset_col, image_col = st.columns([1, 4])
@@ -1189,12 +1178,12 @@ def main() -> None:
                 render_section_header(
                     "Preview",
                     "Calibration preview",
-                    "This is the exact chamber layout the app will use for analysis. The preview is unchanged in function, only framed more clearly.",
+                    "Review the chamber layout.",
                 )
-                st.success("Chamber drawing loaded.")
+                st.success("Chamber layout ready.")
                 st.image(
                     cv2.cvtColor(preview, cv2.COLOR_BGR2RGB),
-                    caption="Calibration preview. This is the layout the app will use.",
+                    caption="Chamber layout preview",
                     use_container_width=True,
                 )
         except Exception as error:  # noqa: BLE001
@@ -1203,8 +1192,8 @@ def main() -> None:
     with st.container(border=True):
         render_section_header(
             "Step 3",
-            "Run the tracking pipeline",
-            "The underlying behavior is unchanged. This panel simply organizes the same chamber-position choices, export toggles, and advanced settings into a cleaner control surface.",
+            "Run analysis",
+            "Choose scoring and export settings.",
         )
         assignment_point_mode = st.selectbox(
             "What should count as the rat's chamber position?",
@@ -1214,18 +1203,16 @@ def main() -> None:
                 "Raw body centroid",
             ],
             help=(
-                "The first option tries to place the chamber-assignment point toward the front of the rat's body, "
-                "using recent motion as a simple estimate of heading. This better matches a head-and-shoulders rule, "
-                "but it is still an approximation, not full pose tracking."
+                "The first option shifts the scoring point toward the rat's front using recent motion. It is still an approximation."
             ),
         )
         use_smoothed_centroid = assignment_point_mode == "Smoothed body centroid"
         if assignment_point_mode == "Head-and-shoulders proxy (Recommended for CPP boundary scoring)":
-            st.caption("This mode uses a single front-of-body proxy point, not two chamber labels. It still assigns only one chamber per frame.")
+            st.caption("Uses one front-of-body proxy point per frame.")
         elif assignment_point_mode == "Smoothed body centroid":
-            st.caption("This mode uses the body centroid with light smoothing to reduce flicker near borders.")
+            st.caption("Uses a lightly smoothed body centroid.")
         else:
-            st.caption("This mode uses the raw body centroid with no smoothing.")
+            st.caption("Uses the raw body centroid.")
         export_annotated = st.checkbox("Create annotated output video", value=True)
         draw_trajectory = st.checkbox("Draw trajectory overlay in annotated video", value=True)
 
@@ -1532,13 +1519,13 @@ def main() -> None:
     with st.container(border=True):
         render_section_header(
             "Step 4",
-            "Read the results",
-            "Everything below uses the same analysis outputs as before, now grouped into clearer summary, QC, export, and preview panels.",
+            "Results",
+            "Summary, QC, exports, and preview.",
         )
         render_results_highlights(results, chamber_seconds_total)
         st.caption(
-            f"Timing used {results['fps_for_timing']:.3f} FPS. "
-            f"Left+center+right chamber time totals {chamber_seconds_total:.3f} seconds."
+            f"Timing FPS: {results['fps_for_timing']:.3f}. "
+            f"Left+center+right total: {chamber_seconds_total:.3f} seconds."
         )
         st.caption(f"Chamber assignment rule used: {results['assignment_point_mode']}")
         st.dataframe(results["summary"], use_container_width=True)
@@ -1546,33 +1533,30 @@ def main() -> None:
     with st.container(border=True):
         render_section_header(
             "QC",
-            "Quality-control view",
-            "Use this panel to judge whether the tracker looked stable and whether any warnings need review before you trust the exported numbers.",
+            "Quality control",
         )
         st.dataframe(results["qc_metrics"], use_container_width=True)
 
         warnings = results.get("warnings", [])
         if warnings:
-            st.warning("Warnings found:")
+            st.warning("Warnings")
             for warning in warnings:
                 st.write(f"- {warning}")
         else:
-            st.success("No major QC warnings were raised.")
+            st.success("No QC warnings.")
 
     if results.get("annotated_video"):
         with st.container(border=True):
             render_section_header(
                 "Output Video",
-                "Annotated output video",
-                "Preview the exported MP4 with chamber outlines, tracking points, and any enabled overlay styling.",
+                "Annotated video",
             )
             st.video(results["annotated_video"])
 
     with st.container(border=True):
         render_section_header(
             "Exports",
-            "Download files",
-            "The same exports are available as before. They are simply grouped into a cleaner, easier-to-scan download area.",
+            "Downloads",
         )
         download_col1, download_col2, download_col3, download_col4 = st.columns(4)
 
@@ -1618,11 +1602,10 @@ def main() -> None:
     with st.container(border=True):
         render_section_header(
             "Preview",
-            "Per-frame preview",
-            "This is still the same preview table, with the full detailed dataset available through the exported CSV file.",
+            "Frame preview",
         )
         st.dataframe(results["per_frame_preview"], use_container_width=True)
-        st.caption(f"Saved output folder: {results['output_dir']}")
+        st.caption(f"Saved folder: {results['output_dir']}")
 
 
 if __name__ == "__main__":
