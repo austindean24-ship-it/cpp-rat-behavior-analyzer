@@ -44,6 +44,8 @@ def ensure_session_state() -> None:
         "video_signature": None,
         "analysis_results": None,
         "canvas_reset_counter": 0,
+        "chamber_boxes": None,
+        "active_chamber_label": "Left chamber",
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -52,6 +54,8 @@ def ensure_session_state() -> None:
 def clear_run_state() -> None:
     st.session_state["analysis_results"] = None
     st.session_state["canvas_reset_counter"] = st.session_state.get("canvas_reset_counter", 0) + 1
+    st.session_state["chamber_boxes"] = None
+    st.session_state["active_chamber_label"] = "Left chamber"
 
 
 def load_video_into_session(video_path: Path, signature: str) -> None:
@@ -912,6 +916,18 @@ def default_chamber_box(frame_width: int, frame_height: int, chamber_index: int)
     return (x1, x2, y1, y2)
 
 
+def initialize_chamber_boxes(frame_width: int, frame_height: int) -> list[dict[str, int]]:
+    return [
+        {
+            "left": coords[0],
+            "top": coords[2],
+            "width": coords[1] - coords[0],
+            "height": coords[3] - coords[2],
+        }
+        for coords in (default_chamber_box(frame_width, frame_height, index) for index in range(3))
+    ]
+
+
 def analysis_output_dir(video_path: Path) -> Path:
     stamp = time.strftime("%Y%m%d_%H%M%S")
     return ensure_directory(RESULTS_DIR / f"{video_path.stem}_{stamp}")
@@ -1066,22 +1082,48 @@ def main() -> None:
             ("Center chamber", "#548a78"),
             ("Right chamber", "#6478c8"),
         ]
-        crop_boxes: list[dict[str, int]] = []
-        tabs = st.tabs([label for label, _ in chamber_specs])
-        for chamber_index, ((label, color), tab) in enumerate(zip(chamber_specs, tabs, strict=False)):
-            with tab:
-                st.caption(f"Drag the box until it covers the {label.lower()}.")
-                crop_box = st_cropper(
-                    frame_image,
-                    realtime_update=True,
-                    default_coords=default_chamber_box(metadata.width, metadata.height, chamber_index),
-                    box_color=color,
-                    aspect_ratio=None,
-                    return_type="box",
-                    stroke_width=3,
-                    key=f"cropper_{st.session_state['canvas_reset_counter']}_{chamber_index}_{video_path.stem}",
-                )
-                crop_boxes.append(crop_box)
+        if (
+            st.session_state.get("chamber_boxes") is None
+            or not isinstance(st.session_state.get("chamber_boxes"), list)
+            or len(st.session_state["chamber_boxes"]) != 3
+        ):
+            st.session_state["chamber_boxes"] = initialize_chamber_boxes(metadata.width, metadata.height)
+
+        selected_label = st.radio(
+            "Choose chamber to edit",
+            options=[label for label, _ in chamber_specs],
+            horizontal=True,
+            key="active_chamber_label",
+            label_visibility="collapsed",
+        )
+        active_index = [label for label, _ in chamber_specs].index(selected_label)
+        active_color = chamber_specs[active_index][1]
+        active_box = st.session_state["chamber_boxes"][active_index]
+        default_coords = (
+            int(active_box["left"]),
+            int(active_box["left"] + active_box["width"]),
+            int(active_box["top"]),
+            int(active_box["top"] + active_box["height"]),
+        )
+
+        st.caption(f"Drag the box until it covers the {selected_label.lower()}.")
+        crop_box = st_cropper(
+            frame_image,
+            realtime_update=True,
+            default_coords=default_coords,
+            box_color=active_color,
+            aspect_ratio=None,
+            return_type="box",
+            stroke_width=3,
+            key=f"cropper_{st.session_state['canvas_reset_counter']}_{active_index}_{video_path.stem}",
+        )
+        st.session_state["chamber_boxes"][active_index] = {
+            "left": int(crop_box["left"]),
+            "top": int(crop_box["top"]),
+            "width": int(crop_box["width"]),
+            "height": int(crop_box["height"]),
+        }
+        crop_boxes = st.session_state["chamber_boxes"]
 
     calibration: ArenaCalibration | None = None
     if len(crop_boxes) == 3:
