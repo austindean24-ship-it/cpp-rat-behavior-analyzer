@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 import cv2
 import numpy as np
@@ -12,6 +12,7 @@ from regions import ArenaCalibration
 
 
 DEFAULT_FPS_FALLBACK = 30.0
+ProgressCallback = Callable[[int, int], None]
 
 
 @dataclass
@@ -108,6 +109,7 @@ def write_annotated_video(
     calibration: ArenaCalibration,
     draw_trajectory: bool = True,
     trail_length: int = 120,
+    progress_callback: ProgressCallback | None = None,
 ) -> Path:
     cap = cv2.VideoCapture(str(input_video_path))
     if not cap.isOpened():
@@ -128,6 +130,8 @@ def write_annotated_video(
 
     indexed_rows = per_frame_df.set_index("frame_index")
     valid_points: list[tuple[int, int]] = []
+    total_frames = max(int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0), len(per_frame_df), 1)
+    processed_frames = 0
 
     while True:
         success, frame = cap.read()
@@ -184,6 +188,9 @@ def write_annotated_video(
             )
 
         writer.write(frame)
+        processed_frames += 1
+        if progress_callback is not None and (processed_frames == total_frames or processed_frames % 60 == 0):
+            progress_callback(processed_frames, total_frames)
 
     cap.release()
     writer.release()
