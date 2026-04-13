@@ -1200,6 +1200,78 @@ def render_sidebar_help() -> None:
     )
 
 
+def render_sidebar_changelog() -> None:
+    with st.sidebar.expander("Changelog", expanded=False):
+        st.markdown(
+            """
+**April 12, 2026**
+
+**Tracking and speed**
+
+- Added chamber-cropped tracking. The tracker now focuses on the drawn chamber area instead of processing the full camera frame.
+- Keeps a small safety padding around the chamber region so the rat is not clipped near edges.
+- Continues saving full-video coordinates in the CSV files, so chamber scoring and annotated video overlays stay aligned with the original video.
+- Keeps the chamber assignment rule unchanged: chamber occupancy is still based on the selected rat position point.
+
+**Results workflow**
+
+- Results tables now appear as soon as tracking, chamber assignment, and CSV export are complete.
+- CSV downloads are shown before optional annotated video export finishes.
+- If annotated video is enabled, the app keeps exporting the MP4 and updates the results area when the video is ready.
+- This makes routine scoring faster to review because users do not have to wait for the optional MP4 before seeing chamber times.
+
+**Fixed tracking configuration**
+
+- Removed the Advanced Settings dropdown from the user interface.
+- Hardcoded the lab-recommended tracker settings for more consistent usage:
+- Minimum contour area: 900 px.
+- Background difference threshold: 40.
+- Frame-to-frame motion threshold: 10.
+- Maximum expected jump: 50 px.
+- Smoothing strength: 0.10.
+
+**Guide and interface**
+
+- Replaced the old sidebar workflow text with a compact quick guide based on the lab quick-guide document.
+- Removed obsolete instructions about Advanced Settings.
+- Updated the empty start screen so it matches the current 3-rectangle chamber drawing workflow.
+- Added this collapsible changelog so version notes stay available without cluttering the main workflow.
+
+**Visual design**
+
+- Updated the app theme from the tan palette to the current slate/teal palette.
+- Kept the subtle lab/rat visual style while improving contrast and readability.
+- Kept the same user flow and controls while polishing the interface.
+
+**Validation**
+
+- Added a crop-specific automated test to confirm cropped tracking still reports coordinates in the original full-video coordinate system.
+- Local test suite passed after these updates.
+- Synthetic validation remained accurate after the chamber-cropping change.
+
+**April 7, 2026**
+
+**Chamber drawing**
+
+- Restored the preferred one-image chamber setup.
+- Users draw 3 click-and-drag rectangles on the same first-frame preview: left, center, and right.
+- Removed the multi-preview chamber box adjustment workflow.
+
+**Streamlit Cloud compatibility**
+
+- Improved the drawing background handling so the uploaded video preview can appear behind the drawing canvas on Streamlit Cloud.
+- Added static file serving support for canvas background images.
+- Kept the local drawing workflow and deployed drawing workflow aligned as closely as possible.
+
+**Tracking behavior**
+
+- Added the head-and-shoulders proxy option for CPP boundary scoring.
+- Preserved centroid-based options for comparison and troubleshooting.
+- Added clearer low-confidence and QC reporting around tracking results.
+"""
+        )
+
+
 def show_metadata(metadata) -> None:
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Width", f"{metadata.width}px")
@@ -1263,6 +1335,7 @@ def main() -> None:
     ensure_session_state()
     inject_visual_theme()
     render_sidebar_help()
+    render_sidebar_changelog()
     render_lab_hero()
 
     with st.container(border=True):
