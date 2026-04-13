@@ -36,6 +36,13 @@ RUNTIME_DIR = ensure_directory(APP_DIR / "runtime_data")
 UPLOAD_DIR = ensure_directory(RUNTIME_DIR / "uploads")
 RESULTS_DIR = ensure_directory(RUNTIME_DIR / "results")
 DEMO_DIR = ensure_directory(RUNTIME_DIR / "demo")
+FIXED_TRACKING_CONFIG = TrackingConfig(
+    min_contour_area=900.0,
+    diff_threshold=40,
+    frame_diff_threshold=10,
+    max_jump_px=50.0,
+    smoothing_alpha=0.10,
+)
 
 
 def ensure_session_state() -> None:
@@ -114,16 +121,16 @@ def inject_visual_theme() -> None:
     hero_silhouette = svg_data_uri(
         """
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 220">
-  <g fill="none" stroke="#B58C74" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.48">
-    <path d="M54 148c0-34 32-58 84-58 23 0 44 5 61 16 18 11 30 28 30 48 0 36-32 59-74 59H118c-37 0-64-28-64-65z" fill="#E8D8CB" stroke="#C6A28B"/>
-    <circle cx="114" cy="89" r="12" fill="#E8D8CB"/>
-    <circle cx="157" cy="89" r="12" fill="#E8D8CB"/>
+  <g fill="none" stroke="#7A9CB0" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.48">
+    <path d="M54 148c0-34 32-58 84-58 23 0 44 5 61 16 18 11 30 28 30 48 0 36-32 59-74 59H118c-37 0-64-28-64-65z" fill="#DCEAF1" stroke="#9CB8C8"/>
+    <circle cx="114" cy="89" r="12" fill="#DCEAF1"/>
+    <circle cx="157" cy="89" r="12" fill="#DCEAF1"/>
     <path d="M71 154c-8 17-20 30-35 39"/>
     <path d="M116 212c-11 0-18-7-18-17"/>
     <path d="M164 212c-11 0-18-7-18-17"/>
     <path d="M247 136c53 6 94 26 124 58 26 27 49 33 74 29"/>
     <path d="M202 117c16-18 25-33 28-48 5-24 18-34 40-34 17 0 31 8 42 24"/>
-    <circle cx="182" cy="117" r="6" fill="#B58C74" stroke="none"/>
+    <circle cx="182" cy="117" r="6" fill="#5D879C" stroke="none"/>
   </g>
 </svg>
 """
@@ -131,7 +138,7 @@ def inject_visual_theme() -> None:
     lab_grid = svg_data_uri(
         """
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">
-  <g fill="none" stroke="#D6C7B7" stroke-width="1" opacity="0.46">
+  <g fill="none" stroke="#D4E1EA" stroke-width="1" opacity="0.46">
     <path d="M0 40h240M0 80h240M0 120h240M0 160h240M0 200h240"/>
     <path d="M40 0v240M80 0v240M120 0v240M160 0v240M200 0v240"/>
   </g>
@@ -141,10 +148,10 @@ def inject_visual_theme() -> None:
     section_divider = svg_data_uri(
         """
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 28">
-  <g fill="none" stroke="#C7B6A6" stroke-width="1.4" opacity="0.9">
+  <g fill="none" stroke="#9FB6C8" stroke-width="1.4" opacity="0.9">
     <path d="M0 14h82M158 14h82"/>
     <path d="M114 10c6-5 14-7 22-5 8 2 12 8 12 13 0 5-4 9-10 9-8 0-15-8-27-8-8 0-15 3-20 8"/>
-    <circle cx="104" cy="14" r="2.4" fill="#C7B6A6" stroke="none"/>
+    <circle cx="104" cy="14" r="2.4" fill="#9FB6C8" stroke="none"/>
   </g>
 </svg>
 """
@@ -152,14 +159,14 @@ def inject_visual_theme() -> None:
     rat_runner = svg_data_uri(
         """
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 34">
-  <g fill="none" stroke="#73483C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M10 20c0-6 6-10 15-10 4 0 8 1 11 3 3 2 5 6 5 9 0 6-5 10-13 10H22c-7 0-12-5-12-12z" fill="#B67763" stroke="#73483C"/>
-    <circle cx="21" cy="9" r="2.8" fill="#D6B3A5" stroke="#73483C"/>
-    <circle cx="28" cy="9" r="2.8" fill="#D6B3A5" stroke="#73483C"/>
+  <g fill="none" stroke="#174A5C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 20c0-6 6-10 15-10 4 0 8 1 11 3 3 2 5 6 5 9 0 6-5 10-13 10H22c-7 0-12-5-12-12z" fill="#3D8EA1" stroke="#174A5C"/>
+    <circle cx="21" cy="9" r="2.8" fill="#B7D8E4" stroke="#174A5C"/>
+    <circle cx="28" cy="9" r="2.8" fill="#B7D8E4" stroke="#174A5C"/>
     <path d="M39 20c8 0 14 3 18 9"/>
     <path d="M16 30c-2 2-4 3-7 3"/>
     <path d="M30 31c-2 2-4 3-7 3"/>
-    <circle cx="34" cy="18" r="1.3" fill="#73483C" stroke="none"/>
+    <circle cx="34" cy="18" r="1.3" fill="#174A5C" stroke="none"/>
   </g>
 </svg>
 """
@@ -167,23 +174,23 @@ def inject_visual_theme() -> None:
     chamber_target = svg_data_uri(
         """
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 38 38">
-  <rect x="2" y="6" width="34" height="26" rx="6" fill="#FFF8F1" stroke="#C0A48F" stroke-width="2"/>
-  <path d="M14 8v22M24 8v22" stroke="#C0A48F" stroke-width="2"/>
-  <circle cx="19" cy="19" r="4.5" fill="#B46C58" opacity="0.88"/>
+  <rect x="2" y="6" width="34" height="26" rx="6" fill="#F5FBFD" stroke="#8BA8BA" stroke-width="2"/>
+  <path d="M14 8v22M24 8v22" stroke="#8BA8BA" stroke-width="2"/>
+  <circle cx="19" cy="19" r="4.5" fill="#0F766E" opacity="0.88"/>
 </svg>
 """
     )
     empty_state_art = svg_data_uri(
         """
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220">
-  <rect width="360" height="220" rx="24" fill="#FBF6F1"/>
+  <rect width="360" height="220" rx="24" fill="#F5FAFC"/>
   <g opacity="0.65">
-    <rect x="66" y="54" width="228" height="112" rx="18" fill="none" stroke="#CBB39F" stroke-width="4"/>
-    <path d="M142 54v112M218 54v112" stroke="#D3BEAE" stroke-width="3"/>
-    <path d="M118 122c0-20 17-34 42-34 11 0 20 2 28 7 9 5 15 14 15 26 0 21-18 34-39 34h-19c-16 0-27-14-27-33z" fill="#E9D8CB" stroke="#BE9A84" stroke-width="3"/>
-    <circle cx="147" cy="86" r="7" fill="#E9D8CB" stroke="#BE9A84" stroke-width="3"/>
-    <circle cx="172" cy="86" r="7" fill="#E9D8CB" stroke="#BE9A84" stroke-width="3"/>
-    <path d="M203 116c34 4 59 18 79 42" fill="none" stroke="#BE9A84" stroke-width="3" stroke-linecap="round"/>
+    <rect x="66" y="54" width="228" height="112" rx="18" fill="none" stroke="#A8BFCE" stroke-width="4"/>
+    <path d="M142 54v112M218 54v112" stroke="#C0D2DE" stroke-width="3"/>
+    <path d="M118 122c0-20 17-34 42-34 11 0 20 2 28 7 9 5 15 14 15 26 0 21-18 34-39 34h-19c-16 0-27-14-27-33z" fill="#DCEAF1" stroke="#7A9CB0" stroke-width="3"/>
+    <circle cx="147" cy="86" r="7" fill="#DCEAF1" stroke="#7A9CB0" stroke-width="3"/>
+    <circle cx="172" cy="86" r="7" fill="#DCEAF1" stroke="#7A9CB0" stroke-width="3"/>
+    <path d="M203 116c34 4 59 18 79 42" fill="none" stroke="#7A9CB0" stroke-width="3" stroke-linecap="round"/>
   </g>
 </svg>
 """
@@ -316,6 +323,41 @@ section[data-testid="stSidebar"] .block-container {{
     border: 1px solid rgba(127, 150, 132, 0.2);
     font-size: 0.86rem;
     color: var(--lab-muted);
+}}
+
+.lab-quick-guide .lab-sidebar-title {{
+    margin-bottom: 0.75rem;
+}}
+
+.lab-guide-section-title {{
+    margin: 0.9rem 0 0.42rem 0;
+    padding-top: 0.8rem;
+    border-top: 1px solid rgba(213, 225, 234, 0.85);
+    color: var(--lab-accent-deep);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}}
+
+.lab-guide-section-title--first {{
+    margin-top: 0.15rem;
+    padding-top: 0;
+    border-top: 0;
+}}
+
+.lab-quick-guide-list {{
+    font-size: 0.87rem;
+    padding-left: 1.05rem;
+}}
+
+.lab-quick-guide-list li {{
+    margin-bottom: 0.58rem;
+}}
+
+.lab-quick-guide-list strong,
+.lab-sidebar-note strong {{
+    color: var(--lab-text);
 }}
 
 .lab-hero {{
@@ -761,6 +803,135 @@ video {{
     margin: 0 0 4px 0;
 }}
 
+:root {{
+    --lab-border: #d5e1ea;
+    --lab-shadow: 0 18px 40px rgba(15, 36, 54, 0.08);
+    --lab-shadow-soft: 0 8px 24px rgba(15, 36, 54, 0.06);
+    --lab-text: #172a3a;
+    --lab-muted: #536879;
+    --lab-muted-soft: #718699;
+    --lab-accent: #0f766e;
+    --lab-accent-deep: #0b4f6c;
+}}
+
+.stApp {{
+    background:
+        radial-gradient(circle at top left, #ffffff 0%, rgba(246, 250, 252, 0.98) 32%, rgba(238, 245, 249, 0.96) 100%),
+        url("{lab_grid}");
+    background-size: auto, 240px 240px;
+}}
+
+div[data-testid="stVerticalBlockBorderWrapper"],
+.lab-sidebar-panel,
+.lab-results-card,
+div[data-testid="stMetric"],
+.cpp-progress-card {{
+    border-color: var(--lab-border);
+    background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248, 252, 254, 0.9) 100%);
+}}
+
+section[data-testid="stSidebar"] {{
+    background:
+        linear-gradient(180deg, rgba(248,252,254,0.98) 0%, rgba(239,247,250,0.98) 100%),
+        url("{lab_grid}");
+    border-right: 1px solid rgba(181, 202, 216, 0.72);
+}}
+
+.lab-hero {{
+    border-color: var(--lab-border);
+    background:
+        linear-gradient(140deg, rgba(255,255,255,0.96) 0%, rgba(244,250,252,0.95) 52%, rgba(232,244,247,0.94) 100%),
+        url("{lab_grid}");
+    box-shadow: 0 24px 56px rgba(15, 36, 54, 0.10);
+}}
+
+.lab-sidebar-kicker,
+.lab-hero__eyebrow {{
+    background: rgba(15, 118, 110, 0.11);
+    color: var(--lab-accent-deep);
+}}
+
+.lab-sidebar-note {{
+    background: rgba(15, 118, 110, 0.08);
+    border-color: rgba(15, 118, 110, 0.20);
+}}
+
+.lab-badge,
+.lab-hero__stat {{
+    border-color: var(--lab-border);
+    background: rgba(255,255,255,0.82);
+}}
+
+.lab-section-step {{
+    background: rgba(11, 79, 108, 0.10);
+    color: var(--lab-accent-deep);
+}}
+
+.lab-empty-state {{
+    border-color: var(--lab-border);
+    background: linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(246,250,252,0.94) 100%);
+}}
+
+div[data-testid="stFileUploaderDropzone"] {{
+    background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(241,248,251,0.98) 100%);
+    border-color: rgba(15, 118, 110, 0.48);
+}}
+
+div[data-testid="stFileUploaderDropzone"]:hover {{
+    box-shadow: 0 12px 28px rgba(15,118,110,0.12);
+}}
+
+.stButton > button,
+.stDownloadButton > button {{
+    border-color: var(--lab-border);
+    background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(239,247,250,0.98) 100%);
+    box-shadow: 0 8px 20px rgba(15, 36, 54, 0.06);
+}}
+
+.stButton > button:hover,
+.stDownloadButton > button:hover {{
+    border-color: rgba(15,118,110,0.62);
+    box-shadow: 0 12px 24px rgba(15, 36, 54, 0.09);
+}}
+
+.stButton > button[kind="primary"] {{
+    background: linear-gradient(135deg, #0f766e 0%, #0b4f6c 100%);
+}}
+
+.stButton > button:focus,
+.stDownloadButton > button:focus,
+div[data-baseweb="input"] input:focus,
+div[data-baseweb="select"] input:focus {{
+    box-shadow: 0 0 0 4px rgba(15,118,110,0.18) !important;
+}}
+
+div[data-baseweb="input"] > div,
+div[data-baseweb="select"] > div,
+.stTextInput input,
+.stNumberInput input {{
+    border-color: var(--lab-border) !important;
+    background: rgba(255,255,255,0.92) !important;
+}}
+
+div[data-baseweb="input"] > div:hover,
+div[data-baseweb="select"] > div:hover {{
+    border-color: rgba(15,118,110,0.58) !important;
+}}
+
+div[data-testid="stDataFrame"],
+iframe[title*="st_canvas"],
+video {{
+    border-color: var(--lab-border);
+}}
+
+.cpp-progress-track {{
+    background: linear-gradient(90deg, #dceaf1 0%, #eef6f9 100%);
+}}
+
+.cpp-progress-fill {{
+    background: linear-gradient(90deg, #4fb3aa 0%, #0f766e 52%, #0b4f6c 100%);
+}}
+
 @media (max-width: 980px) {{
     .lab-hero,
     .lab-empty-state,
@@ -841,7 +1012,7 @@ def render_empty_state() -> None:
   <div>
     <h3 class="lab-empty-state__title">Start a new run</h3>
     <p class="lab-empty-state__copy">
-      Upload a CPP video or create the demo video. Easiest setup: draw one arena box and split it into thirds.
+      Upload a CPP video or create the demo video, then draw one chamber box for each chamber on the first frame.
     </p>
   </div>
   <div class="lab-empty-state__art" aria-hidden="true"></div>
@@ -878,20 +1049,150 @@ def render_results_highlights(results: dict, chamber_seconds_total: float) -> No
     )
 
 
+def render_analysis_results(results: dict) -> None:
+    """Render saved analysis outputs.
+
+    This is used both during a run, after CSVs are ready, and after a rerun when
+    results are loaded from session state.
+    """
+
+    left_center_right = results["summary"][results["summary"]["chamber"].isin(["left", "center", "right"])]
+    chamber_seconds_total = float(left_center_right["seconds"].sum())
+    render_state = "pending_video" if results.get("annotated_video_pending") else "final"
+    widget_suffix = f"{results.get('signature', 'results')}_{render_state}"
+    with st.container(border=True):
+        render_section_header(
+            "Step 4",
+            "Results",
+            "Summary, QC, exports, and preview.",
+        )
+        render_results_highlights(results, chamber_seconds_total)
+        st.caption(
+            f"Timing FPS: {results['fps_for_timing']:.3f}. "
+            f"Left+center+right total: {chamber_seconds_total:.3f} seconds."
+        )
+        st.caption(f"Chamber assignment rule used: {results['assignment_point_mode']}")
+        st.dataframe(results["summary"], use_container_width=True)
+
+    with st.container(border=True):
+        render_section_header(
+            "QC",
+            "Quality control",
+        )
+        st.dataframe(results["qc_metrics"], use_container_width=True)
+
+        warnings = results.get("warnings", [])
+        if warnings:
+            st.warning("Warnings")
+            for warning in warnings:
+                st.write(f"- {warning}")
+        else:
+            st.success("No QC warnings.")
+
+    with st.container(border=True):
+        render_section_header(
+            "Exports",
+            "Downloads",
+        )
+        download_col1, download_col2, download_col3, download_col4 = st.columns(4)
+
+        summary_path = Path(results["summary_csv"])
+        per_frame_path = Path(results["per_frame_csv"])
+        qc_path = Path(results["qc_csv"])
+        tracking_path = Path(results["tracking_csv"])
+
+        download_col1.download_button(
+            "Download summary CSV",
+            data=summary_path.read_bytes(),
+            file_name=summary_path.name,
+            mime="text/csv",
+            key=f"summary_csv_{widget_suffix}",
+        )
+        download_col2.download_button(
+            "Download per-frame CSV",
+            data=per_frame_path.read_bytes(),
+            file_name=per_frame_path.name,
+            mime="text/csv",
+            key=f"per_frame_csv_{widget_suffix}",
+        )
+        download_col3.download_button(
+            "Download QC CSV",
+            data=qc_path.read_bytes(),
+            file_name=qc_path.name,
+            mime="text/csv",
+            key=f"qc_csv_{widget_suffix}",
+        )
+        download_col4.download_button(
+            "Download raw tracking CSV",
+            data=tracking_path.read_bytes(),
+            file_name=tracking_path.name,
+            mime="text/csv",
+            key=f"tracking_csv_{widget_suffix}",
+        )
+
+        if results.get("annotated_video"):
+            video_path = Path(results["annotated_video"])
+            st.download_button(
+                "Download annotated MP4",
+                data=video_path.read_bytes(),
+                file_name=video_path.name,
+                mime="video/mp4",
+                key=f"annotated_video_{widget_suffix}",
+            )
+        elif results.get("annotated_video_pending"):
+            st.info("CSV outputs are ready. Annotated video is still being created.")
+
+    if results.get("annotated_video"):
+        with st.container(border=True):
+            render_section_header(
+                "Output Video",
+                "Annotated video",
+            )
+            st.video(results["annotated_video"])
+    elif results.get("annotated_video_pending"):
+        with st.container(border=True):
+            render_section_header(
+                "Output Video",
+                "Annotated video",
+            )
+            st.info("Annotated video export is running. This section will update when the MP4 is ready.")
+
+    with st.container(border=True):
+        render_section_header(
+            "Preview",
+            "Frame preview",
+        )
+        st.dataframe(results["per_frame_preview"], use_container_width=True)
+        st.caption(f"Saved folder: {results['output_dir']}")
+
+
 def render_sidebar_help() -> None:
     st.sidebar.markdown(
         """
-<div class="lab-sidebar-panel">
-  <div class="lab-sidebar-kicker">Lab workflow</div>
-  <div class="lab-sidebar-title">How To Use This App</div>
-  <ol class="lab-sidebar-list">
-    <li>Upload one rat video, or create the synthetic demo video.</li>
-    <li>Draw the 3 chamber boxes on the first frame.</li>
-    <li>Click <strong>Run analysis</strong>.</li>
-    <li>Review the tables, CSV files, and optional annotated video.</li>
+<div class="lab-sidebar-panel lab-quick-guide">
+  <div class="lab-sidebar-kicker">Quick guide</div>
+  <div class="lab-sidebar-title">CPP Analyzer</div>
+
+  <div class="lab-guide-section-title lab-guide-section-title--first">Setup</div>
+  <ol class="lab-sidebar-list lab-quick-guide-list">
+    <li><strong>Upload video.</strong> Pick a CPP video or create the demo video.</li>
+    <li><strong>Check duration.</strong> A standard 15-minute session should be about 900 seconds.</li>
+    <li><strong>Keep timing default.</strong> Leave manual FPS unchecked unless the video duration is clearly wrong.</li>
+    <li><strong>Define chambers.</strong> Draw 3 rectangles on the same image, one per chamber.</li>
+    <li><strong>Fit boxes tightly.</strong> Avoid extra floor or background when you can.</li>
+    <li><strong>Check preview.</strong> Make sure all 3 boxes sit correctly before running analysis.</li>
   </ol>
+
+  <div class="lab-guide-section-title">Analysis</div>
+  <ol class="lab-sidebar-list lab-quick-guide-list" start="7">
+    <li><strong>Use head-and-shoulders mode.</strong> Recommended for CPP boundary scoring.</li>
+    <li><strong>Annotated video is optional.</strong> Leave it off for routine scoring; turn it on to inspect tracking.</li>
+    <li><strong>Run analysis.</strong> Let processing finish before closing the page.</li>
+    <li><strong>Read chamber time.</strong> Use the first results table for routine CPP scoring.</li>
+  </ol>
+
   <div class="lab-sidebar-note">
-    Best starting point: draw one arena box and split it into thirds.
+    <strong>Color key:</strong> Left = white chamber, Center = middle chamber, Right = black chamber.
   </div>
 </div>
 """,
@@ -1058,9 +1359,9 @@ def main() -> None:
             st.rerun()
 
         canvas_data = st_canvas(
-            fill_color="rgba(255, 90, 54, 0.12)",
+            fill_color="rgba(15, 118, 110, 0.12)",
             stroke_width=3,
-            stroke_color="#d16a57",
+            stroke_color="#0f766e",
             background_image=frame_image,
             update_streamlit=True,
             height=frame_image.height,
@@ -1124,53 +1425,11 @@ def main() -> None:
         export_annotated = st.checkbox("Create annotated output video", value=True)
         draw_trajectory = st.checkbox("Draw trajectory overlay in annotated video", value=True)
 
-        suggested_min_area = max(80, int(metadata.width * metadata.height * 0.0003))
-        with st.expander("Optional advanced tracking settings"):
-            min_contour_area = st.number_input(
-                "Minimum contour area (pixels)",
-                min_value=20,
-                max_value=max(5000, suggested_min_area * 10),
-                value=suggested_min_area,
-                help="If the tracker grabs tiny dust-like blobs, raise this number a little.",
-            )
-            diff_threshold = st.slider(
-                "Background difference threshold",
-                min_value=5,
-                max_value=80,
-                value=28,
-                help="Higher numbers make the tracker stricter. Lower numbers make it more sensitive.",
-            )
-            frame_diff_threshold = st.slider(
-                "Frame-to-frame motion threshold",
-                min_value=5,
-                max_value=60,
-                value=16,
-                help="This helps when the rat moves quickly.",
-            )
-            max_jump_px = st.slider(
-                "Maximum expected centroid jump per frame",
-                min_value=20,
-                max_value=300,
-                value=150,
-                help="If the tracker suddenly jumps across the arena, lowering this can help.",
-            )
-            smoothing_alpha = st.slider(
-                "Smoothing strength",
-                min_value=0.05,
-                max_value=0.95,
-                value=0.35,
-                help="Higher means the tracker reacts faster. Lower means smoother movement.",
-            )
-
-    tracker_config = TrackingConfig(
-        min_contour_area=float(min_contour_area),
-        diff_threshold=int(diff_threshold),
-        frame_diff_threshold=int(frame_diff_threshold),
-        max_jump_px=float(max_jump_px),
-        smoothing_alpha=float(smoothing_alpha),
-    )
+    tracker_config = FIXED_TRACKING_CONFIG
+    run_was_executed = False
 
     if st.button("Run analysis", type="primary", disabled=calibration is None):
+        run_was_executed = True
         if calibration is None:
             st.error("Please draw the chambers before running the analysis.")
         else:
@@ -1183,6 +1442,7 @@ def main() -> None:
                 assignment_point_mode=assignment_point_mode,
             )
             progress_panel = st.empty()
+            results_panel = st.empty()
             analysis_started_at = time.time()
             status_log: list[str] = []
             tracking_started_at: float | None = None
@@ -1233,7 +1493,7 @@ def main() -> None:
                 update_status(
                     fraction,
                     "Tracking the rat through the video",
-                    f"Scanning frame {current:,} of {total:,} to find the rat and estimate one chamber label for that frame.",
+                    f"Scanning chamber-cropped frame {current:,} of {total:,} to find the rat and estimate one chamber label.",
                     (
                         f"Tracker speed: {frames_per_second:.1f} frames/sec | "
                         f"Estimated tracking time remaining: {format_elapsed(remaining_seconds)}"
@@ -1268,8 +1528,8 @@ def main() -> None:
             update_status(
                 0.06,
                 "Preparing the empty-arena background model",
-                "Sampling representative frames so the app can learn what the apparatus looks like without the rat.",
-                "This makes it easier to separate the moving rat from the static box and walls.",
+                "Sampling the drawn chamber area so the app can learn what the apparatus looks like without the rat.",
+                "Tracking now ignores most pixels outside the chamber boxes, with a small safety padding around the ROI.",
                 log_message="Preparing the background model used for motion-based tracking.",
             )
 
@@ -1359,6 +1619,34 @@ def main() -> None:
                     log_message="Saved warnings text file.",
                 )
 
+                results_payload = {
+                    "signature": run_signature,
+                    "output_dir": str(output_dir),
+                    "summary": analysis_bundle.summary,
+                    "qc_metrics": analysis_bundle.qc_metrics,
+                    "warnings": analysis_bundle.warnings,
+                    "fps_for_timing": fps_for_timing,
+                    "assignment_point_mode": assignment_point_mode,
+                    "tracking_csv": str(tracking_csv),
+                    "per_frame_csv": str(per_frame_csv),
+                    "summary_csv": str(summary_csv),
+                    "qc_csv": str(qc_csv),
+                    "warnings_txt": str(warnings_txt),
+                    "annotated_video": None,
+                    "annotated_video_pending": bool(export_annotated),
+                    "per_frame_preview": analysis_bundle.per_frame.head(300),
+                }
+                st.session_state["analysis_results"] = results_payload
+                update_status(
+                    0.94,
+                    "Results and CSV files are ready",
+                    "The chamber-time tables and CSV downloads are available below while optional video export continues.",
+                    f"Results saved in: {output_dir}",
+                    log_message="Tables and CSV downloads are ready.",
+                )
+                with results_panel.container():
+                    render_analysis_results(results_payload)
+
                 annotated_video_path = None
                 if export_annotated:
                     update_status(
@@ -1376,6 +1664,9 @@ def main() -> None:
                         draw_trajectory=draw_trajectory,
                         progress_callback=on_annotation_progress,
                     )
+                    results_payload["annotated_video"] = str(annotated_video_path)
+                    results_payload["annotated_video_pending"] = False
+                    st.session_state["analysis_results"] = results_payload
                     update_status(
                         0.995,
                         "Annotated MP4 export finished",
@@ -1383,6 +1674,11 @@ def main() -> None:
                         f"Saved file: {annotated_video_path.name}",
                         log_message="Annotated video export finished.",
                     )
+                    with results_panel.container():
+                        render_analysis_results(results_payload)
+                else:
+                    results_payload["annotated_video_pending"] = False
+                    st.session_state["analysis_results"] = results_payload
 
                 update_status(
                     1.0,
@@ -1400,120 +1696,12 @@ def main() -> None:
                     log_message="The analysis run stopped because of an error.",
                 )
                 raise
-
-            st.session_state["analysis_results"] = {
-                "signature": run_signature,
-                "output_dir": str(output_dir),
-                "summary": analysis_bundle.summary,
-                "qc_metrics": analysis_bundle.qc_metrics,
-                "warnings": analysis_bundle.warnings,
-                "fps_for_timing": fps_for_timing,
-                "assignment_point_mode": assignment_point_mode,
-                "tracking_csv": str(tracking_csv),
-                "per_frame_csv": str(per_frame_csv),
-                "summary_csv": str(summary_csv),
-                "qc_csv": str(qc_csv),
-                "warnings_txt": str(warnings_txt),
-                "annotated_video": str(annotated_video_path) if annotated_video_path else None,
-                "per_frame_preview": analysis_bundle.per_frame.head(300),
-            }
+            return
 
     results = st.session_state.get("analysis_results")
-    if not results:
+    if run_was_executed or not results:
         return
-
-    left_center_right = results["summary"][results["summary"]["chamber"].isin(["left", "center", "right"])]
-    chamber_seconds_total = float(left_center_right["seconds"].sum())
-    with st.container(border=True):
-        render_section_header(
-            "Step 4",
-            "Results",
-            "Summary, QC, exports, and preview.",
-        )
-        render_results_highlights(results, chamber_seconds_total)
-        st.caption(
-            f"Timing FPS: {results['fps_for_timing']:.3f}. "
-            f"Left+center+right total: {chamber_seconds_total:.3f} seconds."
-        )
-        st.caption(f"Chamber assignment rule used: {results['assignment_point_mode']}")
-        st.dataframe(results["summary"], use_container_width=True)
-
-    with st.container(border=True):
-        render_section_header(
-            "QC",
-            "Quality control",
-        )
-        st.dataframe(results["qc_metrics"], use_container_width=True)
-
-        warnings = results.get("warnings", [])
-        if warnings:
-            st.warning("Warnings")
-            for warning in warnings:
-                st.write(f"- {warning}")
-        else:
-            st.success("No QC warnings.")
-
-    if results.get("annotated_video"):
-        with st.container(border=True):
-            render_section_header(
-                "Output Video",
-                "Annotated video",
-            )
-            st.video(results["annotated_video"])
-
-    with st.container(border=True):
-        render_section_header(
-            "Exports",
-            "Downloads",
-        )
-        download_col1, download_col2, download_col3, download_col4 = st.columns(4)
-
-        summary_path = Path(results["summary_csv"])
-        per_frame_path = Path(results["per_frame_csv"])
-        qc_path = Path(results["qc_csv"])
-        tracking_path = Path(results["tracking_csv"])
-
-        download_col1.download_button(
-            "Download summary CSV",
-            data=summary_path.read_bytes(),
-            file_name=summary_path.name,
-            mime="text/csv",
-        )
-        download_col2.download_button(
-            "Download per-frame CSV",
-            data=per_frame_path.read_bytes(),
-            file_name=per_frame_path.name,
-            mime="text/csv",
-        )
-        download_col3.download_button(
-            "Download QC CSV",
-            data=qc_path.read_bytes(),
-            file_name=qc_path.name,
-            mime="text/csv",
-        )
-        download_col4.download_button(
-            "Download raw tracking CSV",
-            data=tracking_path.read_bytes(),
-            file_name=tracking_path.name,
-            mime="text/csv",
-        )
-
-        if results.get("annotated_video"):
-            video_path = Path(results["annotated_video"])
-            st.download_button(
-                "Download annotated MP4",
-                data=video_path.read_bytes(),
-                file_name=video_path.name,
-                mime="video/mp4",
-            )
-
-    with st.container(border=True):
-        render_section_header(
-            "Preview",
-            "Frame preview",
-        )
-        st.dataframe(results["per_frame_preview"], use_container_width=True)
-        st.caption(f"Saved folder: {results['output_dir']}")
+    render_analysis_results(results)
 
 
 if __name__ == "__main__":

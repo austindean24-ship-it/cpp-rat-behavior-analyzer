@@ -30,6 +30,25 @@ class TrackingConfig:
     fps_fallback: float = DEFAULT_FPS_FALLBACK
     min_heading_motion_px: float = 4.0
     head_shoulder_fraction: float = 0.65
+    roi_padding_px: int = 24
+
+
+@dataclass(frozen=True)
+class FrameCrop:
+    """Rectangle used to analyze only the chamber area of a video frame."""
+
+    x: int
+    y: int
+    width: int
+    height: int
+
+    @property
+    def right(self) -> int:
+        return self.x + self.width
+
+    @property
+    def bottom(self) -> int:
+        return self.y + self.height
 
 
 def _odd_kernel(value: int) -> int:
@@ -42,10 +61,57 @@ def _prepare_gray(frame: np.ndarray, blur_size: int) -> np.ndarray:
     return cv2.GaussianBlur(gray, (blur_size, blur_size), 0)
 
 
+def _crop_array(array: np.ndarray, crop: FrameCrop | None) -> np.ndarray:
+    if crop is None:
+        return array
+    return array[crop.y:crop.bottom, crop.x:crop.right]
+
+
+def _expand_arena_mask(arena_mask: np.ndarray, padding_px: int) -> np.ndarray:
+    """Return a binary chamber mask with a small safety padding for tracking."""
+
+    binary_mask = np.where(arena_mask > 0, 255, 0).astype(np.uint8)
+    padding = int(max(0, round(padding_px)))
+    if padding <= 0:
+        return binary_mask
+
+    kernel_size = _odd_kernel((padding * 2) + 1)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+    return cv2.dilate(binary_mask, kernel, iterations=1)
+
+
+def _crop_bounds_from_mask(mask: np.ndarray, frame_width: int, frame_height: int) -> FrameCrop | None:
+    """Find the smallest frame crop that contains the non-zero mask area."""
+
+    points = cv2.findNonZero(np.where(mask > 0, 255, 0).astype(np.uint8))
+    if points is None:
+        return None
+
+    x, y, width, height = cv2.boundingRect(points)
+    max_width = int(frame_width or mask.shape[1])
+    max_height = int(frame_height or mask.shape[0])
+    left = max(0, int(x))
+    top = max(0, int(y))
+    right = min(max_width, int(x + width))
+    bottom = min(max_height, int(y + height))
+    if right <= left or bottom <= top:
+        return None
+    return FrameCrop(x=left, y=top, width=right - left, height=bottom - top)
+
+
+def _offset_point(point: tuple[float, float] | None, crop: FrameCrop | None) -> tuple[float, float] | None:
+    if point is None:
+        return None
+    if crop is None:
+        return point
+    return (float(point[0] + crop.x), float(point[1] + crop.y))
+
+
 def estimate_background(
     video_path: str | Path,
     sample_count: int = 60,
     blur_size: int = 5,
+    crop: FrameCrop | None = None,
 ) -> np.ndarray:
     """Estimate a static background using the median of sampled frames."""
 
@@ -70,6 +136,7 @@ def estimate_background(
         success, frame = cap.read()
         if not success or frame is None:
             continue
+        frame = _crop_array(frame, crop)
         samples.append(_prepare_gray(frame, blur_size))
 
     cap.release()
@@ -173,12 +240,17 @@ def _find_best_contour(
     mask: np.ndarray,
     previous_point: tuple[float, float] | None,
     config: TrackingConfig,
+    scoring_frame_area: float | None = None,
 ) -> tuple[np.ndarray | None, tuple[float, float] | None, float, float]:
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         return (None, None, np.nan, -1.0)
 
-    frame_area = float(mask.shape[0] * mask.shape[1])
+    frame_area = (
+        float(scoring_frame_area)
+        if scoring_frame_area and scoring_frame_area > 0
+        else float(mask.shape[0] * mask.shape[1])
+    )
     best_contour: np.ndarray | None = None
     best_centroid: tuple[float, float] | None = None
     best_area = np.nan
@@ -249,10 +321,25 @@ class SingleRatTracker:
     ) -> pd.DataFrame:
         metadata = get_video_metadata(video_path, fps_fallback=self.config.fps_fallback)
         effective_fps = float(fps_override) if fps_override and fps_override > 0 else metadata.fps
+
+        crop: FrameCrop | None = None
+        tracking_arena_mask: np.ndarray | None = None
+        if arena_mask is not None:
+            expected_shape = (metadata.height, metadata.width)
+            if arena_mask.shape[:2] != expected_shape:
+                raise ValueError(
+                    "The arena mask must match the video frame size. "
+                    f"Expected {expected_shape}, got {arena_mask.shape[:2]}."
+                )
+            expanded_mask = _expand_arena_mask(arena_mask, self.config.roi_padding_px)
+            crop = _crop_bounds_from_mask(expanded_mask, frame_width=metadata.width, frame_height=metadata.height)
+            tracking_arena_mask = _crop_array(expanded_mask, crop)
+
         background = estimate_background(
             video_path=video_path,
             sample_count=self.config.background_sample_count,
             blur_size=self.config.gaussian_blur_size,
+            crop=crop,
         )
 
         cap = cv2.VideoCapture(str(video_path))
@@ -270,24 +357,27 @@ class SingleRatTracker:
 
         frame_index = 0
         total_frames = max(metadata.frame_count, 1)
+        full_frame_area = float(max(metadata.width * metadata.height, 1))
 
         while True:
             success, frame = cap.read()
             if not success or frame is None:
                 break
 
-            gray = _prepare_gray(frame, self.config.gaussian_blur_size)
+            tracking_frame = _crop_array(frame, crop)
+            gray = _prepare_gray(tracking_frame, self.config.gaussian_blur_size)
             primary_mask = self._build_primary_mask(
                 gray_frame=gray,
                 background_gray=background,
                 previous_gray=previous_gray,
                 subtractor=subtractor,
-                arena_mask=arena_mask,
+                arena_mask=tracking_arena_mask,
             )
             contour, centroid, area, primary_score = _find_best_contour(
                 mask=primary_mask,
                 previous_point=previous_smoothed,
                 config=self.config,
+                scoring_frame_area=full_frame_area,
             )
 
             tracking_status = "tracked"
@@ -301,7 +391,7 @@ class SingleRatTracker:
                 fallback_candidates = self._build_fallback_masks(
                     gray_frame=gray,
                     previous_point=previous_smoothed,
-                    arena_mask=arena_mask,
+                    arena_mask=tracking_arena_mask,
                 )
                 best_fallback = (None, None, np.nan, -1.0)
                 for fallback_mask in fallback_candidates:
@@ -309,6 +399,7 @@ class SingleRatTracker:
                         mask=fallback_mask,
                         previous_point=previous_smoothed,
                         config=self.config,
+                        scoring_frame_area=full_frame_area,
                     )
                     if current[3] > best_fallback[3]:
                         best_fallback = current
@@ -397,20 +488,26 @@ class SingleRatTracker:
                 smoothed_head_shoulder = (np.nan, np.nan)
                 distance_from_previous = np.nan
 
+            full_centroid = _offset_point(centroid, crop)
+            full_smoothed = _offset_point(smoothed, crop) if centroid is not None else None
+            full_front_point = _offset_point(front_point, crop)
+            full_head_shoulder_point = _offset_point(head_shoulder_point, crop)
+            full_smoothed_head_shoulder = _offset_point(smoothed_head_shoulder, crop) if centroid is not None else None
+
             results.append(
                 {
                     "frame_index": frame_index,
                     "time_seconds": frame_index / effective_fps if effective_fps > 0 else 0.0,
-                    "centroid_x": float(centroid[0]) if centroid is not None else np.nan,
-                    "centroid_y": float(centroid[1]) if centroid is not None else np.nan,
-                    "smoothed_x": float(smoothed[0]) if centroid is not None else np.nan,
-                    "smoothed_y": float(smoothed[1]) if centroid is not None else np.nan,
-                    "front_x": float(front_point[0]) if front_point is not None else np.nan,
-                    "front_y": float(front_point[1]) if front_point is not None else np.nan,
-                    "head_shoulder_x": float(head_shoulder_point[0]) if head_shoulder_point is not None else np.nan,
-                    "head_shoulder_y": float(head_shoulder_point[1]) if head_shoulder_point is not None else np.nan,
-                    "smoothed_head_shoulder_x": float(smoothed_head_shoulder[0]) if centroid is not None else np.nan,
-                    "smoothed_head_shoulder_y": float(smoothed_head_shoulder[1]) if centroid is not None else np.nan,
+                    "centroid_x": float(full_centroid[0]) if full_centroid is not None else np.nan,
+                    "centroid_y": float(full_centroid[1]) if full_centroid is not None else np.nan,
+                    "smoothed_x": float(full_smoothed[0]) if full_smoothed is not None else np.nan,
+                    "smoothed_y": float(full_smoothed[1]) if full_smoothed is not None else np.nan,
+                    "front_x": float(full_front_point[0]) if full_front_point is not None else np.nan,
+                    "front_y": float(full_front_point[1]) if full_front_point is not None else np.nan,
+                    "head_shoulder_x": float(full_head_shoulder_point[0]) if full_head_shoulder_point is not None else np.nan,
+                    "head_shoulder_y": float(full_head_shoulder_point[1]) if full_head_shoulder_point is not None else np.nan,
+                    "smoothed_head_shoulder_x": float(full_smoothed_head_shoulder[0]) if full_smoothed_head_shoulder is not None else np.nan,
+                    "smoothed_head_shoulder_y": float(full_smoothed_head_shoulder[1]) if full_smoothed_head_shoulder is not None else np.nan,
                     "head_estimate_source": head_estimate_source,
                     "contour_area": float(area) if not np.isnan(area) else np.nan,
                     "tracking_status": tracking_status,

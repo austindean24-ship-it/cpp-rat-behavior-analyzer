@@ -9,6 +9,7 @@ demo_outputs/
 demo_outputs_check/
 demo_outputs_check2/
 demo_outputs_quick/
+static/canvas_backgrounds/
 
 *.pyc
 *.pyo
