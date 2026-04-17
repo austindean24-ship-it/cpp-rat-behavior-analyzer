@@ -42,6 +42,7 @@ FIXED_TRACKING_CONFIG = TrackingConfig(
     frame_diff_threshold=10,
     max_jump_px=50.0,
     smoothing_alpha=0.10,
+    roi_padding_px=0,
 )
 
 
@@ -1204,12 +1205,30 @@ def render_sidebar_changelog() -> None:
     with st.sidebar.expander("Changelog", expanded=False):
         st.markdown(
             """
+**April 16, 2026**
+
+**Exact chamber-only tracking**
+
+- Removed the tracking tolerance around the drawn chamber boxes.
+- The tracker now considers movement only inside the user-drawn chamber quadrilaterals.
+- Shadows, reflections, hands, or room movement outside the drawn chambers are excluded from the tracking mask.
+- Kept chamber scoring, CSV outputs, annotated video export, and the user workflow unchanged.
+
+**Synthetic demo video**
+
+- Replaced the jumpy synthetic demo movement with a smoother continuous path.
+- Demo rat now steers between chamber targets with small randomized rat-like wandering instead of teleporting between segment centers.
+- Updated the demo drawing to use a simple body, head, tail, and shadow silhouette.
+- Demo ground truth now records the chamber where the generated rat actually appears on each frame.
+- Creating a new demo now refreshes the loaded demo video even when it reuses the same filename.
+- Demo video length is now 5 minutes for a more realistic practice run.
+
 **April 12, 2026**
 
 **Tracking and speed**
 
 - Added chamber-cropped tracking. The tracker now focuses on the drawn chamber area instead of processing the full camera frame.
-- Keeps a small safety padding around the chamber region so the rat is not clipped near edges.
+- The tracker now uses the exact drawn chamber mask with no extra outside padding.
 - Continues saving full-video coordinates in the CSV files, so chamber scoring and annotated video overlays stay aligned with the original video.
 - Keeps the chamber assignment rule unchanged: chamber occupancy is still based on the selected rat position point.
 
@@ -1353,7 +1372,11 @@ def main() -> None:
         demo_col, clear_col = st.columns([1, 1])
         if demo_col.button("Create demo video for practice"):
             demo_files = generate_synthetic_cpp_video(DEMO_DIR)
-            load_video_into_session(Path(demo_files["video_path"]), signature=f"demo::{demo_files['video_path']}")
+            demo_video_path = Path(demo_files["video_path"])
+            load_video_into_session(
+                demo_video_path,
+                signature=f"demo::{demo_video_path}::{demo_video_path.stat().st_mtime_ns}",
+            )
             st.success("Demo video created and loaded.")
 
         if clear_col.button("Forget current analysis"):
@@ -1602,7 +1625,7 @@ def main() -> None:
                 0.06,
                 "Preparing the empty-arena background model",
                 "Sampling the drawn chamber area so the app can learn what the apparatus looks like without the rat.",
-                "Tracking now ignores most pixels outside the chamber boxes, with a small safety padding around the ROI.",
+                "Tracking now ignores pixels outside the exact drawn chamber quadrilaterals.",
                 log_message="Preparing the background model used for motion-based tracking.",
             )
 

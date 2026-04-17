@@ -30,7 +30,7 @@ class TrackingConfig:
     fps_fallback: float = DEFAULT_FPS_FALLBACK
     min_heading_motion_px: float = 4.0
     head_shoulder_fraction: float = 0.65
-    roi_padding_px: int = 24
+    roi_padding_px: int = 0
 
 
 @dataclass(frozen=True)
@@ -68,7 +68,7 @@ def _crop_array(array: np.ndarray, crop: FrameCrop | None) -> np.ndarray:
 
 
 def _expand_arena_mask(arena_mask: np.ndarray, padding_px: int) -> np.ndarray:
-    """Return a binary chamber mask with a small safety padding for tracking."""
+    """Return a binary chamber mask, optionally expanded by a small padding."""
 
     binary_mask = np.where(arena_mask > 0, 255, 0).astype(np.uint8)
     padding = int(max(0, round(padding_px)))

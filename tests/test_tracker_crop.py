@@ -47,7 +47,7 @@ def test_chamber_crop_keeps_tracker_coordinates_in_original_frame(tmp_path) -> N
             min_contour_area=20.0,
             max_jump_px=35.0,
             smoothing_alpha=0.25,
-            roi_padding_px=6,
+            roi_padding_px=0,
         )
     )
 
