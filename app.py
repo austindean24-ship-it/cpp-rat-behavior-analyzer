@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import html
 import hashlib
 import time
@@ -32,6 +33,8 @@ from tracker import SingleRatTracker, TrackingConfig
 
 
 APP_DIR = Path(__file__).resolve().parent
+ASSETS_DIR = APP_DIR / "assets"
+CREATOR_PHOTO_PATH = ASSETS_DIR / "austin_dean_headshot.png"
 RUNTIME_DIR = ensure_directory(APP_DIR / "runtime_data")
 UPLOAD_DIR = ensure_directory(RUNTIME_DIR / "uploads")
 RESULTS_DIR = ensure_directory(RUNTIME_DIR / "results")
@@ -116,6 +119,13 @@ def results_signature(
 def svg_data_uri(svg: str) -> str:
     compact_svg = "".join(line.strip() for line in svg.splitlines())
     return f"data:image/svg+xml;utf8,{quote(compact_svg)}"
+
+
+def image_file_to_data_uri(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
 
 
 def inject_visual_theme() -> None:
@@ -230,7 +240,7 @@ def inject_visual_theme() -> None:
 
 h1, h2, h3, h4 {{
     color: var(--lab-text);
-    letter-spacing: -0.025em;
+    letter-spacing: 0;
 }}
 
 p, label, li {{
@@ -407,7 +417,7 @@ section[data-testid="stSidebar"] .block-container {{
     font-size: clamp(2rem, 3vw, 2.85rem);
     line-height: 1.02;
     margin: 0 0 0.85rem 0;
-    max-width: 14ch;
+    max-width: 17ch;
 }}
 
 .lab-hero__copy {{
@@ -579,6 +589,194 @@ section[data-testid="stSidebar"] .block-container {{
 
 .lab-results-card__value--accent {{
     color: var(--lab-accent-deep);
+}}
+
+.lab-workflow-guide {{
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.65rem;
+    padding: 0.9rem;
+    margin: 0 0 1.15rem 0;
+    border: 1px solid var(--lab-border);
+    border-radius: 24px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(241,248,251,0.92) 100%);
+    box-shadow: var(--lab-shadow-soft);
+}}
+
+.lab-workflow-guide::before {{
+    content: "";
+    position: absolute;
+    left: 2rem;
+    right: 2rem;
+    top: 2.1rem;
+    height: 2px;
+    background: repeating-linear-gradient(
+        90deg,
+        rgba(11, 79, 108, 0.28) 0,
+        rgba(11, 79, 108, 0.28) 18px,
+        transparent 18px,
+        transparent 28px
+    );
+    pointer-events: none;
+}}
+
+.lab-workflow-step {{
+    position: relative;
+    z-index: 1;
+    min-height: 118px;
+    padding: 0.72rem 0.72rem 0.68rem 0.72rem;
+    border: 1px solid rgba(213, 225, 234, 0.92);
+    border-radius: 18px;
+    background: rgba(255,255,255,0.82);
+}}
+
+.lab-workflow-step__index {{
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    margin-bottom: 0.58rem;
+    background: #eef6f9;
+    border: 1px solid rgba(11, 79, 108, 0.18);
+    color: var(--lab-accent-deep);
+    font-size: 0.78rem;
+    font-weight: 800;
+}}
+
+.lab-workflow-step__title {{
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: var(--lab-text);
+    margin-bottom: 0.25rem;
+}}
+
+.lab-workflow-step__copy {{
+    font-size: 0.79rem;
+    line-height: 1.42;
+    color: var(--lab-muted);
+}}
+
+.lab-workflow-step--active {{
+    border-color: rgba(15, 118, 110, 0.68);
+    box-shadow: 0 10px 22px rgba(15, 118, 110, 0.10);
+}}
+
+.lab-workflow-step--active .lab-workflow-step__index {{
+    background: linear-gradient(135deg, #0f766e 0%, #0b4f6c 100%);
+    color: #ffffff;
+}}
+
+.lab-workflow-step--complete .lab-workflow-step__index {{
+    background: rgba(15, 118, 110, 0.13);
+    color: var(--lab-accent-deep);
+}}
+
+.lab-helper-note {{
+    border-left: 3px solid var(--lab-accent);
+    padding: 0.7rem 0.9rem;
+    margin: 0.25rem 0 0.95rem 0;
+    border-radius: 0 14px 14px 0;
+    background: rgba(15, 118, 110, 0.07);
+    color: var(--lab-muted);
+    line-height: 1.55;
+}}
+
+.lab-status-callout {{
+    padding: 0.78rem 0.9rem;
+    margin: 0.35rem 0 0.85rem 0;
+    border-radius: 16px;
+    border: 1px solid var(--lab-border);
+    background: rgba(255,255,255,0.76);
+    color: var(--lab-text);
+    font-weight: 650;
+}}
+
+.lab-status-callout--ready {{
+    border-color: rgba(15, 118, 110, 0.36);
+    background: rgba(15, 118, 110, 0.08);
+}}
+
+.lab-status-callout--pending {{
+    border-color: rgba(213, 152, 84, 0.34);
+    background: rgba(213, 152, 84, 0.08);
+}}
+
+.lab-chamber-card-grid {{
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.72rem;
+    margin: 0.25rem 0 1rem 0;
+}}
+
+.lab-chamber-card {{
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--lab-border);
+    border-radius: 17px;
+    padding: 0.85rem 0.85rem 0.78rem 0.85rem;
+    background: rgba(255,255,255,0.84);
+    box-shadow: var(--lab-shadow-soft);
+}}
+
+.lab-chamber-card::before {{
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 5px;
+    background: var(--chamber-accent, var(--lab-accent));
+}}
+
+.lab-chamber-card__label {{
+    color: var(--lab-muted-soft);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+}}
+
+.lab-chamber-card__seconds {{
+    color: var(--lab-text);
+    font-size: 1.08rem;
+    font-weight: 800;
+    margin-bottom: 0.16rem;
+}}
+
+.lab-chamber-card__meta {{
+    color: var(--lab-muted);
+    font-size: 0.78rem;
+}}
+
+.lab-export-checklist {{
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.7rem;
+    margin: 0.25rem 0 1rem 0;
+}}
+
+.lab-export-chip {{
+    border: 1px solid var(--lab-border);
+    border-radius: 15px;
+    padding: 0.7rem 0.78rem;
+    background: rgba(255,255,255,0.78);
+}}
+
+.lab-export-chip__label {{
+    color: var(--lab-muted-soft);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}}
+
+.lab-export-chip__value {{
+    margin-top: 0.24rem;
+    color: var(--lab-text);
+    font-size: 0.86rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
 }}
 
 div[data-testid="stMetric"] {{
@@ -933,15 +1131,560 @@ video {{
     background: linear-gradient(90deg, #4fb3aa 0%, #0f766e 52%, #0b4f6c 100%);
 }}
 
+/* Stronger CPP console redesign: squarer scientific panels, chamber motifs, and a darker header. */
+:root {{
+    --cpp-bg: #f6fafc;
+    --cpp-primary: #0f766e;
+    --cpp-secondary: #0b4f6c;
+    --cpp-surface: #ffffff;
+    --cpp-border: #d5e1ea;
+    --cpp-text: #172a3a;
+    --cpp-muted: #536879;
+    --cpp-warning: #d59854;
+    --cpp-success: #0f766e;
+    --cpp-error: #b45353;
+}}
+
+.block-container {{
+    max-width: 1240px;
+}}
+
+div[data-testid="stVerticalBlockBorderWrapper"] {{
+    border-radius: 8px;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(247,251,253,0.96) 100%);
+    box-shadow: 0 10px 24px rgba(15, 36, 54, 0.07);
+    border-color: rgba(166, 190, 205, 0.88);
+}}
+
+.lab-sidebar-panel,
+.lab-empty-state,
+.lab-results-card,
+.lab-workflow-guide,
+.lab-workflow-step,
+.lab-chamber-card,
+.lab-export-chip,
+div[data-testid="stMetric"],
+div[data-testid="stDataFrame"],
+iframe[title*="st_canvas"],
+video,
+div[data-testid="stExpander"] {{
+    border-radius: 8px;
+}}
+
+.lab-hero {{
+    grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+    align-items: stretch;
+    border-radius: 8px;
+    border: 1px solid rgba(91, 137, 160, 0.58);
+    padding: 1.2rem;
+    background:
+        linear-gradient(135deg, rgba(23, 42, 58, 0.98) 0%, rgba(11, 79, 108, 0.96) 58%, rgba(15, 118, 110, 0.88) 100%),
+        url("{lab_grid}");
+    box-shadow: 0 18px 42px rgba(15, 36, 54, 0.24);
+}}
+
+.lab-hero::after {{
+    opacity: 0.08;
+    filter: brightness(2.4) saturate(0.6);
+}}
+
+.lab-hero__eyebrow {{
+    border-radius: 4px;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(220, 234, 241, 0.28);
+    color: #dceaf1;
+}}
+
+.lab-hero__title {{
+    color: #ffffff;
+    max-width: 16ch;
+    font-size: clamp(2.2rem, 3.4vw, 3.35rem);
+}}
+
+.lab-hero__copy {{
+    color: #dceaf1;
+    max-width: 58ch;
+}}
+
+.lab-badge {{
+    border-radius: 6px;
+    background: rgba(255,255,255,0.10);
+    border-color: rgba(220,234,241,0.25);
+    color: #f7fbfd;
+    box-shadow: none;
+}}
+
+.lab-hero__meta {{
+    display: grid;
+    grid-template-rows: minmax(190px, 1fr) auto;
+    gap: 0.85rem;
+}}
+
+.lab-hero__stat-grid {{
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem;
+}}
+
+.lab-hero__stat {{
+    border-radius: 7px;
+    background: rgba(255,255,255,0.10);
+    border: 1px solid rgba(220,234,241,0.25);
+    box-shadow: none;
+}}
+
+.lab-hero__stat-label {{
+    color: rgba(220,234,241,0.78);
+}}
+
+.lab-hero__stat-value {{
+    color: #ffffff;
+}}
+
+.cpp-chamber-diagram {{
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    min-height: 190px;
+    border: 1px solid rgba(220,234,241,0.34);
+    border-radius: 8px;
+    overflow: hidden;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%);
+}}
+
+.cpp-chamber {{
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0 0 0.75rem 0;
+    color: rgba(255,255,255,0.86);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-right: 1px solid rgba(220,234,241,0.28);
+}}
+
+.cpp-chamber:last-of-type {{
+    border-right: 0;
+}}
+
+.cpp-chamber--left {{
+    background: linear-gradient(180deg, rgba(235,99,71,0.24), rgba(235,99,71,0.06));
+}}
+
+.cpp-chamber--center {{
+    background: linear-gradient(180deg, rgba(56,162,140,0.26), rgba(56,162,140,0.06));
+}}
+
+.cpp-chamber--right {{
+    background: linear-gradient(180deg, rgba(63,81,181,0.25), rgba(63,81,181,0.06));
+}}
+
+.cpp-chamber::before {{
+    content: "";
+    position: absolute;
+    top: 18px;
+    left: 24%;
+    right: 24%;
+    height: 42px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.34);
+    opacity: 0.7;
+}}
+
+.cpp-tail-path {{
+    position: absolute;
+    left: 14%;
+    right: 10%;
+    top: 48%;
+    height: 42px;
+    border-top: 3px solid rgba(220,234,241,0.76);
+    border-radius: 50%;
+    transform: rotate(-4deg);
+}}
+
+.cpp-tail-path::after {{
+    content: "";
+    position: absolute;
+    right: -4px;
+    top: -8px;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: #4fb3aa;
+    box-shadow: 0 0 0 5px rgba(79,179,170,0.16);
+}}
+
+.lab-workflow-guide {{
+    border-radius: 8px;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #ffffff;
+    border-color: rgba(166, 190, 205, 0.88);
+}}
+
+.lab-workflow-guide::before {{
+    display: none;
+}}
+
+.lab-workflow-step {{
+    min-height: 124px;
+    border-radius: 0;
+    border: 0;
+    border-right: 1px solid rgba(213,225,234,0.92);
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(246,250,252,0.94) 100%);
+}}
+
+.lab-workflow-step:last-child {{
+    border-right: 0;
+}}
+
+.lab-workflow-step--active {{
+    box-shadow: inset 0 4px 0 #0f766e;
+    background:
+        linear-gradient(180deg, rgba(240,249,250,1) 0%, rgba(255,255,255,0.98) 100%);
+}}
+
+.lab-workflow-step--complete {{
+    box-shadow: inset 0 4px 0 rgba(15,118,110,0.34);
+}}
+
+.lab-section-header {{
+    margin: -0.05rem 0 0.35rem 0;
+    padding: 0.25rem 0 0.85rem 0.9rem;
+    border-left: 4px solid var(--lab-accent);
+}}
+
+.lab-section-header::after {{
+    width: 100%;
+    max-width: 360px;
+    height: 12px;
+    opacity: 0.72;
+}}
+
+.lab-section-step {{
+    border-radius: 4px;
+}}
+
+div[data-testid="stFileUploaderDropzone"] {{
+    border-radius: 8px;
+}}
+
+.stButton > button,
+.stDownloadButton > button,
+div[data-baseweb="input"] > div,
+div[data-baseweb="select"] > div,
+.stTextInput input,
+.stNumberInput input {{
+    border-radius: 8px !important;
+}}
+
+.lab-helper-note,
+.lab-status-callout {{
+    border-radius: 6px;
+}}
+
+.lab-empty-state {{
+    border-style: solid;
+    background:
+        linear-gradient(90deg, rgba(255,255,255,0.98) 0%, rgba(247,251,253,0.96) 50%, rgba(232,244,247,0.94) 100%);
+}}
+
+.cpp-instrument-header {{
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(410px, 0.88fr);
+    gap: 1rem;
+    align-items: center;
+    margin: 0 0 0.95rem 0;
+    padding: 0.92rem 1rem;
+    border: 1px solid var(--cpp-border);
+    border-left: 6px solid var(--cpp-primary);
+    border-radius: 8px;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(244,250,252,0.98) 100%),
+        url("{lab_grid}");
+    box-shadow: 0 12px 28px rgba(15, 36, 54, 0.08);
+}}
+
+.cpp-instrument-header__identity {{
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.9rem;
+    align-items: center;
+}}
+
+.cpp-instrument-header__title {{
+    margin: 0;
+    color: var(--cpp-text);
+    font-size: clamp(1.75rem, 2.6vw, 2.55rem);
+    line-height: 1;
+}}
+
+.cpp-instrument-header__subtitle {{
+    margin: 0.3rem 0 0 0;
+    color: var(--cpp-muted);
+    font-size: 0.98rem;
+}}
+
+.cpp-mini-chamber {{
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, 25px);
+    width: 75px;
+    height: 42px;
+    border: 2px solid var(--cpp-secondary);
+    border-radius: 5px;
+    overflow: hidden;
+    background: #ffffff;
+}}
+
+.cpp-mini-chamber span {{
+    border-right: 1px solid rgba(11,79,108,0.34);
+}}
+
+.cpp-mini-chamber span:nth-child(1) {{
+    background: rgba(235,99,71,0.18);
+}}
+
+.cpp-mini-chamber span:nth-child(2) {{
+    background: rgba(56,162,140,0.20);
+}}
+
+.cpp-mini-chamber span:nth-child(3) {{
+    border-right: 0;
+    background: rgba(63,81,181,0.18);
+}}
+
+.cpp-mini-chamber::after {{
+    content: "";
+    position: absolute;
+    left: 10px;
+    right: 9px;
+    top: 18px;
+    height: 11px;
+    border-top: 2px solid var(--cpp-primary);
+    border-radius: 50%;
+    transform: rotate(-6deg);
+}}
+
+.cpp-instrument-header__readouts {{
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.55rem;
+}}
+
+.cpp-readout {{
+    min-height: 68px;
+    padding: 0.62rem 0.7rem;
+    border: 1px solid rgba(166, 190, 205, 0.9);
+    border-radius: 7px;
+    background: rgba(255,255,255,0.78);
+}}
+
+.cpp-readout span {{
+    display: block;
+    margin-bottom: 0.28rem;
+    color: var(--lab-muted-soft);
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}}
+
+.cpp-readout strong {{
+    color: var(--cpp-text);
+    font-size: 0.88rem;
+    line-height: 1.25;
+}}
+
+.lab-workflow-step__marker {{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    width: 44px;
+    height: 22px;
+    margin-bottom: 0.5rem;
+    border: 1px solid rgba(11,79,108,0.34);
+    border-radius: 4px;
+    overflow: hidden;
+    background: #ffffff;
+}}
+
+.lab-workflow-step__marker span {{
+    border-right: 1px solid rgba(11,79,108,0.18);
+    background: rgba(213,225,234,0.42);
+}}
+
+.lab-workflow-step__marker span:last-child {{
+    border-right: 0;
+}}
+
+.lab-workflow-step__step {{
+    color: var(--lab-muted-soft);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 0.24rem;
+}}
+
+.lab-workflow-step--active .lab-workflow-step__marker {{
+    border-color: var(--cpp-primary);
+}}
+
+.lab-workflow-step--active .lab-workflow-step__marker span:nth-child(1) {{
+    background: rgba(235,99,71,0.26);
+}}
+
+.lab-workflow-step--active .lab-workflow-step__marker span:nth-child(2) {{
+    background: rgba(56,162,140,0.30);
+}}
+
+.lab-workflow-step--active .lab-workflow-step__marker span:nth-child(3) {{
+    background: rgba(63,81,181,0.26);
+}}
+
+.lab-workflow-step--complete .lab-workflow-step__marker span {{
+    background: rgba(15,118,110,0.16);
+}}
+
+.cpp-region-reference {{
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    margin: 0.1rem 0 0.9rem 0;
+    border: 1px solid rgba(166, 190, 205, 0.92);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #ffffff;
+}}
+
+.cpp-region-reference__cell {{
+    min-height: 78px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0.65rem;
+    border-right: 1px solid rgba(166, 190, 205, 0.72);
+    color: var(--cpp-text);
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}}
+
+.cpp-region-reference__cell:last-child {{
+    border-right: 0;
+}}
+
+.cpp-region-reference__cell--left {{
+    background: linear-gradient(180deg, rgba(235,99,71,0.16), rgba(255,255,255,0.90));
+}}
+
+.cpp-region-reference__cell--center {{
+    background: linear-gradient(180deg, rgba(56,162,140,0.18), rgba(255,255,255,0.90));
+}}
+
+.cpp-region-reference__cell--right {{
+    background: linear-gradient(180deg, rgba(63,81,181,0.16), rgba(255,255,255,0.90));
+}}
+
+.cpp-creator-footer {{
+    margin: 1.3rem 0 0 0;
+    padding: 1rem;
+    border: 1px solid var(--cpp-border);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.74);
+    color: var(--cpp-muted);
+    font-size: 0.92rem;
+    line-height: 1.55;
+}}
+
+.cpp-creator-footer__inner {{
+    display: grid;
+    grid-template-columns: minmax(96px, 132px) minmax(0, 1fr);
+    gap: 1rem;
+    align-items: center;
+}}
+
+.cpp-creator-footer__photo-wrap {{
+    width: 100%;
+    max-width: 132px;
+    aspect-ratio: 1;
+    border: 1px solid var(--cpp-border);
+    border-radius: 8px;
+    background: #ffffff;
+    overflow: hidden;
+    box-shadow: var(--lab-shadow-soft);
+}}
+
+.cpp-creator-footer__photo {{
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}}
+
+.cpp-creator-footer__kicker {{
+    color: var(--cpp-primary);
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.18rem;
+}}
+
+.cpp-creator-footer__name {{
+    color: var(--cpp-text);
+    font-size: 1.08rem;
+    font-weight: 850;
+    line-height: 1.2;
+    margin-bottom: 0.2rem;
+}}
+
+.cpp-creator-footer__meta {{
+    color: var(--cpp-muted);
+    font-size: 0.84rem;
+    font-weight: 700;
+    margin-bottom: 0.52rem;
+}}
+
+.cpp-creator-footer__copy {{
+    margin: 0;
+}}
+
+.cpp-creator-footer strong {{
+    color: var(--cpp-text);
+}}
+
 @media (max-width: 980px) {{
     .lab-hero,
+    .cpp-instrument-header,
     .lab-empty-state,
-    .lab-results-strip {{
+    .lab-results-strip,
+    .lab-workflow-guide,
+    .lab-hero__stat-grid,
+    .cpp-instrument-header__readouts,
+    .lab-chamber-card-grid,
+    .lab-export-checklist {{
+        grid-template-columns: 1fr;
+    }}
+
+    .cpp-creator-footer__inner {{
         grid-template-columns: 1fr;
     }}
 
     .lab-hero__title {{
         max-width: none;
+    }}
+
+    .lab-workflow-guide::before {{
+        display: none;
     }}
 }}
 
@@ -959,33 +1702,66 @@ video {{
 def render_lab_hero() -> None:
     st.markdown(
         """
-<section class="lab-hero">
-  <div>
-    <div class="lab-hero__eyebrow">Internal Research Tool</div>
-    <h1 class="lab-hero__title">Three-Chamber CPP Rat Behavior Analyzer</h1>
-    <p class="lab-hero__copy">
-      Track one fixed-camera CPP video, review QC, and export results.
-    </p>
-    <div class="lab-badges">
-      <span class="lab-badge">Single-rat tracking</span>
-      <span class="lab-badge">Three-chamber CPP</span>
-      <span class="lab-badge">QC + CSV exports</span>
+<section class="cpp-instrument-header">
+  <div class="cpp-instrument-header__identity">
+    <div class="cpp-mini-chamber" aria-hidden="true">
+      <span></span><span></span><span></span>
+    </div>
+    <div>
+      <h1 class="cpp-instrument-header__title">CPP Analyzer</h1>
+      <p class="cpp-instrument-header__subtitle">Rat conditioned place preference video analysis.</p>
     </div>
   </div>
-  <div class="lab-hero__meta">
-    <div class="lab-hero__stat">
-      <div class="lab-hero__stat-label">Workflow</div>
-      <div class="lab-hero__stat-value">Upload, draw, run, export</div>
+  <div class="cpp-instrument-header__readouts">
+    <div class="cpp-readout">
+      <span>Readout</span>
+      <strong>Chamber time</strong>
     </div>
-    <div class="lab-hero__stat">
-      <div class="lab-hero__stat-label">Video type</div>
-      <div class="lab-hero__stat-value">Single rat, fixed apparatus</div>
+    <div class="cpp-readout">
+      <span>Experiment</span>
+      <strong>Rat CPP session</strong>
     </div>
-    <div class="lab-hero__stat">
-      <div class="lab-hero__stat-label">Outputs</div>
-      <div class="lab-hero__stat-value">Summary, QC, CSV, annotated MP4</div>
+    <div class="cpp-readout">
+      <span>Outputs</span>
+      <strong>Summary, QC, CSV, MP4</strong>
     </div>
   </div>
+</section>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def render_workflow_guide(current_step: int) -> None:
+    steps = [
+        ("Upload Session", "Load one CPP session or create the practice demo."),
+        ("Define Chambers", "Draw left, center, and right regions."),
+        ("Track Rat", "Run chamber-cropped localization."),
+        ("Review Chamber Time", "Inspect totals, QC metrics, and warnings."),
+        ("Export Results", "Download CSV files and optional MP4."),
+    ]
+    step_cards = []
+    for index, (title, copy) in enumerate(steps, start=1):
+        if index < current_step:
+            state = "complete"
+        elif index == current_step:
+            state = "active"
+        else:
+            state = "pending"
+        step_cards.append(
+            f"""
+<div class="lab-workflow-step lab-workflow-step--{state}">
+  <div class="lab-workflow-step__marker" aria-hidden="true"><span></span><span></span><span></span></div>
+  <div class="lab-workflow-step__step">Step {index}</div>
+  <div class="lab-workflow-step__title">{html.escape(title)}</div>
+  <div class="lab-workflow-step__copy">{html.escape(copy)}</div>
+</div>
+"""
+        )
+    st.markdown(
+        f"""
+<section class="lab-workflow-guide" aria-label="CPP analysis workflow">
+  {"".join(step_cards)}
 </section>
 """,
         unsafe_allow_html=True,
@@ -1006,21 +1782,136 @@ def render_section_header(step_label: str, title: str, description: str | None =
     )
 
 
+def render_chamber_reference() -> None:
+    st.markdown(
+        """
+<section class="cpp-region-reference" aria-label="Three chamber reference">
+  <div class="cpp-region-reference__cell cpp-region-reference__cell--left">
+    <span>Left chamber</span>
+  </div>
+  <div class="cpp-region-reference__cell cpp-region-reference__cell--center">
+    <span>Center chamber</span>
+  </div>
+  <div class="cpp-region-reference__cell cpp-region-reference__cell--right">
+    <span>Right chamber</span>
+  </div>
+</section>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def render_chamber_summary_cards(summary_df) -> None:
+    rows = {str(row.chamber): row for row in summary_df.itertuples(index=False)}
+    card_specs = [
+        ("left", "Left / white", "#eb6347"),
+        ("center", "Center", "#38a28c"),
+        ("right", "Right / black", "#3f51b5"),
+        ("boundary", "Boundary", "#d59854"),
+        ("missing", "Missing", "#718699"),
+    ]
+    cards: list[str] = []
+    for chamber_key, label, accent in card_specs:
+        row = rows.get(chamber_key)
+        seconds = float(getattr(row, "seconds", 0.0)) if row is not None else 0.0
+        frames = int(getattr(row, "frames", 0)) if row is not None else 0
+        percent = float(getattr(row, "percent_of_video", 0.0)) if row is not None else 0.0
+        cards.append(
+            f"""
+<div class="lab-chamber-card" style="--chamber-accent: {accent};">
+  <div class="lab-chamber-card__label">{html.escape(label)}</div>
+  <div class="lab-chamber-card__seconds">{seconds:.3f} s</div>
+  <div class="lab-chamber-card__meta">{frames:,} frames · {percent:.2f}%</div>
+</div>
+"""
+        )
+    st.markdown(
+        f"""
+<section class="lab-chamber-card-grid" aria-label="Chamber-time summary cards">
+  {"".join(cards)}
+</section>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def render_export_checklist(results: dict) -> None:
+    export_specs = [
+        ("Summary", Path(results["summary_csv"]).name),
+        ("Per-frame", Path(results["per_frame_csv"]).name),
+        ("QC metrics", Path(results["qc_csv"]).name),
+        ("Raw tracking", Path(results["tracking_csv"]).name),
+    ]
+    chips = "".join(
+        f"""
+<div class="lab-export-chip">
+  <div class="lab-export-chip__label">{html.escape(label)}</div>
+  <div class="lab-export-chip__value">{html.escape(filename)}</div>
+</div>
+"""
+        for label, filename in export_specs
+    )
+    st.markdown(
+        f"""
+<section class="lab-export-checklist" aria-label="Export files">
+  {chips}
+</section>
+""",
+        unsafe_allow_html=True,
+    )
+
+
 def render_empty_state() -> None:
     st.markdown(
         """
 <section class="lab-empty-state">
   <div>
-    <h3 class="lab-empty-state__title">Start a new run</h3>
+    <h3 class="lab-empty-state__title">Start a new CPP run</h3>
     <p class="lab-empty-state__copy">
-      Upload a CPP video or create the demo video, then draw one chamber box for each chamber on the first frame.
+      Upload a CPP video or create the demo video. The app will keep the workflow in order:
+      session setup, chamber regions, tracking review, chamber-time summary, and export results.
     </p>
+    <ul class="lab-empty-state__list">
+      <li>Use one fixed-camera session video at a time.</li>
+      <li>Draw exactly three chamber boxes on the first frame.</li>
+      <li>Review the chamber overlay before running analysis.</li>
+    </ul>
   </div>
   <div class="lab-empty-state__art" aria-hidden="true"></div>
 </section>
 """,
         unsafe_allow_html=True,
     )
+
+
+def render_about_creator() -> None:
+    photo_uri = image_file_to_data_uri(CREATOR_PHOTO_PATH)
+    photo_html = (
+        '<div class="cpp-creator-footer__photo-wrap">'
+        f'<img class="cpp-creator-footer__photo" src="{photo_uri}" alt="Portrait of Austin Dean">'
+        "</div>"
+        if photo_uri
+        else ""
+    )
+    creator_html = (
+        '<footer class="cpp-creator-footer">'
+        '<div class="cpp-creator-footer__inner">'
+        f"{photo_html}"
+        "<div>"
+        '<div class="cpp-creator-footer__kicker">About the creator</div>'
+        '<div class="cpp-creator-footer__name">Austin Dean</div>'
+        '<div class="cpp-creator-footer__meta">Biochemistry major, Leadership Studies minor | Fernandez Lab | Christopher Newport University</div>'
+        '<p class="cpp-creator-footer__copy">'
+        "Austin built CPP Analyzer while developing research skills in behavioral pharmacology and conditioned place preference analysis. "
+        "The project grew from a practical lab need: make rat CPP video scoring clearer, less repetitive, and easier to audit across sessions. "
+        "His long-term goal is to pursue graduate training in pharmacology or a related biomedical field, connecting molecular drug action with measurable outcomes. "
+        "This tool reflects that motivation by pairing careful chamber-time measurement with transparent outputs researchers can review, validate, and reuse."
+        "</p>"
+        "</div>"
+        "</div>"
+        "</footer>"
+    )
+    st.markdown(creator_html, unsafe_allow_html=True)
 
 
 def render_results_highlights(results: dict, chamber_seconds_total: float) -> None:
@@ -1064,10 +1955,11 @@ def render_analysis_results(results: dict) -> None:
     with st.container(border=True):
         render_section_header(
             "Step 4",
-            "Results",
-            "Summary, QC, exports, and preview.",
+            "Review Chamber Time",
+            "Scan the chamber totals first, then use the unchanged table for the exact output values.",
         )
         render_results_highlights(results, chamber_seconds_total)
+        render_chamber_summary_cards(results["summary"])
         st.caption(
             f"Timing FPS: {results['fps_for_timing']:.3f}. "
             f"Left+center+right total: {chamber_seconds_total:.3f} seconds."
@@ -1078,7 +1970,8 @@ def render_analysis_results(results: dict) -> None:
     with st.container(border=True):
         render_section_header(
             "QC",
-            "Quality control",
+            "Tracking review",
+            "Review detection stability before using the chamber-time numbers.",
         )
         st.dataframe(results["qc_metrics"], use_container_width=True)
 
@@ -1092,9 +1985,11 @@ def render_analysis_results(results: dict) -> None:
 
     with st.container(border=True):
         render_section_header(
-            "Exports",
-            "Downloads",
+            "Step 5",
+            "Export results",
+            "Download the same CSV files and optional annotated MP4 generated by the existing pipeline.",
         )
+        render_export_checklist(results)
         download_col1, download_col2, download_col3, download_col4 = st.columns(4)
 
         summary_path = Path(results["summary_csv"])
@@ -1147,21 +2042,24 @@ def render_analysis_results(results: dict) -> None:
         with st.container(border=True):
             render_section_header(
                 "Output Video",
-                "Annotated video",
+                "Annotated video review",
+                "Optional MP4 with chamber outlines, assignment point, and trajectory overlay.",
             )
             st.video(results["annotated_video"])
     elif results.get("annotated_video_pending"):
         with st.container(border=True):
             render_section_header(
                 "Output Video",
-                "Annotated video",
+                "Annotated video review",
+                "Optional MP4 with chamber outlines, assignment point, and trajectory overlay.",
             )
             st.info("Annotated video export is running. This section will update when the MP4 is ready.")
 
     with st.container(border=True):
         render_section_header(
             "Preview",
-            "Frame preview",
+            "Frame-level preview",
+            "The first 300 frame assignments are shown for quick auditing.",
         )
         st.dataframe(results["per_frame_preview"], use_container_width=True)
         st.caption(f"Saved folder: {results['output_dir']}")
@@ -1356,17 +2254,27 @@ def main() -> None:
     render_sidebar_help()
     render_sidebar_changelog()
     render_lab_hero()
+    top_step = 5 if st.session_state.get("analysis_results") else (2 if st.session_state.get("video_path") else 1)
+    render_workflow_guide(top_step)
 
     with st.container(border=True):
         render_section_header(
             "Step 1",
-            "Pick a video",
-            "Upload a video or use the demo.",
+            "Upload Session",
+            "Choose one CPP session video, or create the synthetic demo for practice.",
+        )
+        st.markdown(
+            """
+<div class="lab-helper-note">
+  Keep one animal and one fixed-camera session in this run. Uploading a new video clears the current chamber drawing and results.
+</div>
+""",
+            unsafe_allow_html=True,
         )
         uploaded_file = st.file_uploader(
-            "Upload one top-down or near top-down video",
+            "Video session file",
             type=["mp4", "mov", "avi", "m4v"],
-            help="New here? Try the demo video first.",
+            help="Upload one top-down or near top-down CPP session video. New here? Try the demo video first.",
         )
 
         demo_col, clear_col = st.columns([1, 1])
@@ -1392,6 +2300,7 @@ def main() -> None:
 
     if not st.session_state.get("video_path"):
         render_empty_state()
+        render_about_creator()
         return
 
     video_path = Path(st.session_state["video_path"])
@@ -1403,6 +2312,7 @@ def main() -> None:
             "Video details",
             "Check FPS, duration, and size.",
         )
+        st.caption(f"Current video: {video_path.name}")
         show_metadata(metadata)
 
     with st.container(border=True):
@@ -1436,8 +2346,17 @@ def main() -> None:
     with st.container(border=True):
         render_section_header(
             "Step 2",
-            "Define chambers",
-            "Draw one box for each chamber on the same image.",
+            "Define Chambers",
+            "Draw one box for each chamber on the first frame.",
+        )
+        render_chamber_reference()
+        st.markdown(
+            """
+<div class="lab-helper-note">
+  Chamber boxes are sorted from left to right after drawing. The left, center, and right chamber labels come from that order.
+</div>
+""",
+            unsafe_allow_html=True,
         )
 
         boundary_margin_px = st.number_input(
@@ -1481,9 +2400,9 @@ def main() -> None:
             preview = draw_calibration_overlay(first_frame.copy(), calibration)
             with st.container(border=True):
                 render_section_header(
-                    "Preview",
-                    "Calibration preview",
-                    "Review the chamber layout.",
+                    "Step 2 Review",
+                    "Verify chamber boundaries",
+                    "Confirm the left, center, and right outlines before running tracking.",
                 )
                 st.success("Chamber layout ready.")
                 st.image(
@@ -1497,9 +2416,27 @@ def main() -> None:
     with st.container(border=True):
         render_section_header(
             "Step 3",
-            "Run analysis",
-            "Choose scoring and export settings.",
+            "Track Rat",
+            "Choose the chamber-scoring point and optional annotated video export.",
         )
+        if calibration is None:
+            st.markdown(
+                """
+<div class="lab-status-callout lab-status-callout--pending">
+  Chamber regions are not ready yet. Draw exactly 3 rectangles before running analysis.
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                """
+<div class="lab-status-callout lab-status-callout--ready">
+  Chamber regions are ready. Review the scoring point below, then run tracking.
+</div>
+""",
+                unsafe_allow_html=True,
+            )
         assignment_point_mode = st.selectbox(
             "What should count as the rat's chamber position?",
             options=[
@@ -1792,12 +2729,15 @@ def main() -> None:
                     log_message="The analysis run stopped because of an error.",
                 )
                 raise
+            render_about_creator()
             return
 
     results = st.session_state.get("analysis_results")
     if run_was_executed or not results:
+        render_about_creator()
         return
     render_analysis_results(results)
+    render_about_creator()
 
 
 if __name__ == "__main__":
