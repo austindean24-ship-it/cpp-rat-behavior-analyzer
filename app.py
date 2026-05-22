@@ -2103,6 +2103,15 @@ def render_sidebar_changelog() -> None:
     with st.sidebar.expander("Changelog", expanded=False):
         st.markdown(
             """
+**May 21, 2026**
+
+**Interface refresh**
+
+- Redesigned the Streamlit interface around the five-step CPP workflow.
+- Added clearer chamber-themed panels, status states, and creator bio section.
+- Removed study-specific wording so the app reads as a general rat CPP analysis tool.
+- No tracking, chamber scoring, summary, or export behavior was changed.
+
 **April 16, 2026**
 
 **Exact chamber-only tracking**
