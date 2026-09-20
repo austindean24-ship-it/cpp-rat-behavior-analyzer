@@ -136,8 +136,104 @@ def _render_results(results: dict) -> None:
             _download("Annotated MP4", results["annotated_video"], "video/mp4")
 
 
+def _render_epm_sidebar() -> None:
+    st.sidebar.markdown(
+        """
+<style>
+.epm-sidebar-panel {
+    box-sizing: border-box;
+    padding: 1.15rem 1rem;
+    border: 1px solid rgba(166, 190, 205, 0.88);
+    border-radius: 22px;
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(15, 36, 54, 0.07);
+    color: #172a3a;
+}
+.epm-sidebar-kicker {
+    display: inline-block;
+    padding: 0.34rem 0.7rem;
+    border-radius: 999px;
+    background: rgba(15, 118, 110, 0.11);
+    color: #0f766e;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+.epm-sidebar-title {
+    margin: 0.7rem 0 0.75rem;
+    font-size: 1.18rem;
+    font-weight: 700;
+}
+.epm-sidebar-section {
+    margin: 0.85rem 0 0.4rem;
+    padding-top: 0.7rem;
+    border-top: 1px solid #d5e1ea;
+    color: #0f766e;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.epm-sidebar-list {
+    margin: 0;
+    padding-left: 1.1rem;
+    font-size: 0.87rem;
+}
+.epm-sidebar-list li {
+    margin-bottom: 0.55rem;
+    line-height: 1.45;
+}
+.epm-sidebar-note {
+    margin-top: 0.85rem;
+    padding: 0.7rem 0.8rem;
+    border: 1px solid rgba(15, 118, 110, 0.2);
+    border-radius: 14px;
+    background: rgba(15, 118, 110, 0.08);
+    font-size: 0.86rem;
+    line-height: 1.45;
+}
+</style>
+<div class="epm-sidebar-panel">
+  <div class="epm-sidebar-kicker">Quick guide</div>
+  <div class="epm-sidebar-title">EPM Analyzer</div>
+  <div class="epm-sidebar-section">Setup</div>
+  <ol class="epm-sidebar-list">
+    <li><strong>Upload video.</strong> Check the duration and FPS.</li>
+    <li><strong>Choose a clear frame.</strong> Select a calibration time without the experimenter over the maze.</li>
+    <li><strong>Draw five regions.</strong> Outline center, two open arms, and two closed arms. Right-click to close each polygon, then Send to Streamlit.</li>
+    <li><strong>Check labels.</strong> Map the numbered polygons and review their boundaries.</li>
+  </ol>
+  <div class="epm-sidebar-section">Analysis</div>
+  <ol class="epm-sidebar-list" start="5">
+    <li><strong>Use the head-and-shoulders proxy.</strong> Set dwell time and initial-arm counting to your lab rule.</li>
+    <li><strong>Run analysis.</strong> Keep the page open while tracking and optional video export finish.</li>
+    <li><strong>Review results.</strong> Check the event table, QC warnings, and annotated video.</li>
+    <li><strong>Download outputs.</strong> Save the six-column summary and review files.</li>
+  </ol>
+  <div class="epm-sidebar-note">Confirm automated counts against reviewed video before using them as research measurements.</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+    with st.sidebar.expander("Changelog", expanded=False):
+        st.markdown(
+            """
+**September 20, 2026**
+
+**EPM analyzer added**
+
+- Added a separate EPM section with five-region calibration and the six requested counts and times.
+- Added a selectable calibration frame for videos that start with the experimenter in view.
+- Added head-and-shoulders proxy scoring, QC warnings, event exports, and an optional annotated MP4.
+- Kept CPP scoring in its own section.
+"""
+        )
+
+
 def main() -> None:
     st.set_page_config(page_title="EPM Rat Behavior Analyzer", layout="wide")
+    _render_epm_sidebar()
     st.title("Elevated Plus Maze Analyzer")
     st.caption("Upload one fixed-camera session, choose a clear calibration frame, draw five maze regions, and score the rat.")
     st.caption("Pilot scoring: review the event table and annotated video before using results as research measurements.")

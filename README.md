@@ -344,8 +344,9 @@ If total time is inconsistent with the known session length, inspect the video F
 ## Elevated Plus Maze (EPM) section
 
 The EPM analyzer is a separate page in the same Streamlit app. Keep launching
-the existing site with `streamlit run app.py`, then select **EPM Analyzer** in
-the sidebar. The original CPP workflow and its output files are unchanged.
+the existing site with `streamlit run app.py`, then select **CPP Analyzer** or
+**EPM Analyzer** in the sidebar. Each section has its own quick guide and changelog.
+The original CPP workflow and its output files are unchanged.
 
 ### EPM workflow
 
