@@ -340,3 +340,60 @@ If total time is inconsistent with the known session length, inspect the video F
 - latency-to-entry metrics
 - manual correction mode
 - broader support for irregular chamber geometries
+
+## Elevated Plus Maze (EPM) section
+
+The EPM analyzer is a separate page in the same Streamlit app. Keep launching
+the existing site with `streamlit run app.py`, then select **EPM Analyzer** in
+the sidebar. The original CPP workflow and its output files are unchanged.
+
+### EPM workflow
+
+1. Upload one fixed-camera EPM video. Check its FPS and duration.
+2. Choose a clear calibration frame (the first frame may show the experimenter),
+   then left-click the corners of each of five walking-surface polygons and
+   **right-click to close** each polygon. Draw center, two open
+   arms, and two closed arms. Exclude room equipment and shadows. Click the
+   canvas icon labeled **Send to Streamlit** after all five are drawn.
+3. Map the numbered polygons to **center**, **open arm 1**, **open arm 2**,
+   **closed arm 1**, and **closed arm 2**. Confirm the labeled overlay. The app
+   rejects substantial region overlaps and arms that do not meet the center.
+4. Use the **head-and-shoulders proxy** scoring point to match the current lab
+   choice. The default dwell is 0.3 seconds; set it to the lab protocol. Review whether
+   the initial arm should count as an entry.
+5. Run analysis. Review QC warnings, the event table, and the annotated MP4
+   before using results.
+
+The maze-wide tracking mask is the union of the five polygons. The tracker
+returns coordinates in the original video frame. Behavioral labels are assigned
+after tracking, using the individual polygons.
+
+An open or closed arm entry is a confirmed transition from center into that
+arm. A return from an arm into center is a center entry. Consecutive frames in
+one arm count once. A brief center or arm label shorter than the chosen dwell
+setting is not a new event. Missing, outside, carried-forward, and low-confidence
+frames break event continuity; they cannot create an entry. The initial arm can
+optionally count once. The motion-based head-and-shoulders point is a proxy,
+not anatomical pose estimation.
+
+### EPM outputs
+
+EPM results are stored under `runtime_data/epm_results/`. The main
+`summary.csv` has the six requested columns: Open Arm Entries, Closed Arm
+Entries, Center Entry, and whole-second time in open arms, closed arms, and
+center. Whole seconds use largest-remainder rounding so the reported classes
+and unclassified time add to rounded video duration. The region and QC files
+retain fractional seconds and unclassified frames.
+
+Other exports are `events.csv`, `region_times.csv`,
+`per_frame_assignments.csv`, `tracking_raw.csv`, `qc_metrics.csv`,
+`warnings.txt`, `calibration_and_settings.json`, and optional
+`annotated_output.mp4`. The annotated video shows the regions, scoring point,
+trajectory, tracking status, and confirmed events.
+
+The EPM event rule and polygons require validation against lab-scored sessions
+before using automated values as research measurements. The current tests cover
+geometry, scoring-point selection, entry transitions, ambiguous frames,
+rounding, and tracking on synthetic video; they do not establish accuracy on
+every real camera setup. The app's QC warnings and annotated video are essential
+for this review.
