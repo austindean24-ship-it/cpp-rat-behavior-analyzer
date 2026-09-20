@@ -2750,10 +2750,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    if hasattr(st, "navigation") and hasattr(st, "Page"):
-        st.navigation([
-            st.Page(main, title="CPP Analyzer", default=True),
-            st.Page("pages/1_EPM_Analyzer.py", title="EPM Analyzer", url_path="EPM_Analyzer"),
-        ]).run()
-    else:
-        main()
+    from epm_ui import main as epm_main
+
+    st.navigation([
+        st.Page(main, title="CPP Analyzer", default=True),
+        st.Page(epm_main, title="EPM Analyzer", url_path="EPM_Analyzer"),
+    ]).run()
