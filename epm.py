@@ -287,6 +287,8 @@ def detect_epm_events(
     candidate_start = -1
     candidate_count = 0
     first_eligible_position: int | None = None
+    included_positions = np.flatnonzero(data["analysis_included"].to_numpy()) if "analysis_included" in data else np.arange(len(data))
+    interval_start_position = int(included_positions[0]) if len(included_positions) else 0
     first_baseline_committed = False
     skipped_direct_arm_changes = 0
     segment = None
@@ -296,7 +298,8 @@ def detect_epm_events(
         event_type = ""
         if source is None:
             if (not first_baseline_committed and count_initial_arm and destination != "center"
-                    and first_eligible_position is not None and first_eligible_position <= dwell_frames):
+                    and first_eligible_position is not None
+                    and first_eligible_position - interval_start_position <= dwell_frames):
                 event_type = "open_arm_entry" if destination.startswith("open_") else "closed_arm_entry"
         elif source == "center" and destination.startswith("open_"):
             event_type = "open_arm_entry"
@@ -427,6 +430,9 @@ def create_epm_bundle(
     ] + [{"region": "unclassified", "frames": unknown_frames, "seconds": round(unknown_frames / fps, 3)}])
     coverage = 100 * (len(selected) - unknown_frames) / len(selected)
     status = selected["tracking_status"]
+    head_sources = selected.get(
+        "head_estimate_source", pd.Series("provided_head_proxy", index=selected.index)
+    )
     low_confidence = int(selected["low_confidence"].fillna(False).sum())
     rejected = int((status == "rejected").sum())
     rejected_jumps = int((selected.get("rejection_reason", pd.Series(index=selected.index, dtype=str)) == "raw_jump").sum())
@@ -447,7 +453,10 @@ def create_epm_bundle(
         {"metric": "rejected_candidate_seconds", "value": round(rejected / fps, 3)},
         {"metric": "rejected_raw_jumps", "value": rejected_jumps},
         {"metric": "boundary_unclassified_frames", "value": int(selected["on_boundary"].sum())},
-        {"metric": "missing_head_proxy_frames", "value": int(((selected["assignment_point_source"] == "centroid_fallback") & (status == "tracked")).sum())},
+        {"metric": "missing_head_proxy_frames", "value": int((
+            (status == "tracked")
+            & ~head_sources.isin({"motion_heading", "provided_head_proxy"})
+        ).sum())},
         {"metric": "skipped_direct_arm_changes", "value": skipped},
         {"metric": "event_dwell_frames", "value": max(1, math.ceil(min_dwell_seconds * fps))},
         {"metric": "review_state", "value": "needs_manual_review"},

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import cv2
 import numpy as np
+import pandas as pd
 
 from epm import create_epm_bundle
 from epm_tracker import Candidate, EPMTrackState, EPMTracker
@@ -67,6 +68,17 @@ def test_untrusted_frames_have_unknown_time_and_no_proxy_fallback() -> None:
     assert bundle.per_frame.loc[4, "assignment_point_source"] == "centroid_fallback"
     assert bundle.summary.loc[0, "Open Arm Entries"] == 0
     assert bundle.qc_metrics.set_index("metric").loc["unclassified_frames", "value"] == 3
+    assert bundle.qc_metrics.set_index("metric").loc["missing_head_proxy_frames", "value"] == 1
+
+
+def test_trimmed_interval_can_count_initial_arm_occupancy() -> None:
+    rows = tracking_rows(["center"] * 10 + ["closed_1"] * 4)
+    bundle = create_epm_bundle(
+        rows, calibration(), fps=10, min_dwell_seconds=0.2,
+        analysis_start_seconds=1.0, analysis_end_seconds=1.4,
+    )
+    assert bundle.summary.loc[0, "Closed Arm Entries"] == 1
+    assert bundle.summary.loc[0, "Center Entry"] == 0
 
 
 def test_boundary_peeks_do_not_make_entries_but_confirmed_crossings_do() -> None:
@@ -109,3 +121,53 @@ def test_trail_refuses_gaps_and_off_maze_diagonals() -> None:
     assert not _valid_trail_edge((1, (100, 150), 1), (3, (150, 100), 1), mask)
     assert not _valid_trail_edge((1, (100, 150), 1), (2, (150, 100), 1), mask)
     assert not _valid_trail_edge((1, (100, 100), 1), (2, (110, 100), 2), mask)
+
+
+def test_video_does_not_follow_person_outside_static_rat(tmp_path) -> None:
+    maze = calibration()
+    path = tmp_path / "person_outside.mp4"
+    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), 10, (200, 200))
+    assert writer.isOpened()
+    for index in range(80):
+        frame = np.full((200, 200, 3), 35, np.uint8)
+        for region in maze.regions:
+            cv2.fillPoly(frame, [region.as_int_polygon()], (90, 90, 90))
+        # External movement is present even when the rat is absent.
+        cv2.circle(frame, (10 + index % 20, 10), 9, (240, 240, 240), -1)
+        if 20 <= index < 60:
+            cv2.circle(frame, (100, 100), 8, (245, 245, 245), -1)
+        writer.write(frame)
+    writer.release()
+    tracked = EPMTracker(TrackingConfig(min_contour_area=30, diff_threshold=20)).track_video(path, maze)
+    assert tracked.iloc[:20]["centroid_x"].isna().all()
+    assert tracked.iloc[60:]["centroid_x"].isna().all()
+    stable = tracked.iloc[24:55]
+    assert stable["tracking_status"].eq("tracked").mean() > 0.8
+    assert stable["centroid_x"].dropna().between(90, 110).all()
+    result = create_epm_bundle(tracked, maze, 10, mode="centroid")
+    assert result.region_times.set_index("region").loc["unclassified", "frames"] >= 20
+    assert result.summary.loc[0, "Open Arm Entries"] == 0
+
+
+def test_realistic_normal_and_fast_center_to_arm_motion_is_retained() -> None:
+    maze = calibration()
+    for step in (5, 12):
+        state = EPMTrackState(maze.tracking_mask(), TrackingConfig(max_jump_px=120, smoothing_alpha=1), 10, 30)
+        y_values = [100] * 5 + list(range(100 - step, 45, -step))
+        rows = []
+        for index, y in enumerate(y_values):
+            accepted, _, status, _, _ = state.update([candidate(100, y)], index)
+            points = state.score_points(accepted, index) if accepted else {}
+            anchor = points.get("head_smoothed", (np.nan, np.nan))
+            rows.append({
+                "frame_index": index, "time_seconds": index / 10,
+                "centroid_x": 100 if accepted else np.nan, "centroid_y": y if accepted else np.nan,
+                "smoothed_head_shoulder_x": anchor[0], "smoothed_head_shoulder_y": anchor[1],
+                "head_estimate_source": points.get("head_source", "missing"),
+                "tracking_status": status, "low_confidence": status != "tracked",
+                "carried_forward": False, "contour_area": accepted.area if accepted else np.nan,
+                "distance_from_previous_px": step, "track_segment_id": state.segment if accepted else np.nan,
+            })
+        assert all(row["tracking_status"] == "tracked" for row in rows[5:])
+        bundle = create_epm_bundle(pd.DataFrame(rows), maze, 10, min_dwell_seconds=0.1, count_initial_arm=False)
+        assert bundle.summary.loc[0, "Open Arm Entries"] == 1
