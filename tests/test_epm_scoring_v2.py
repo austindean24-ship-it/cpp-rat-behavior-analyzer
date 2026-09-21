@@ -56,28 +56,56 @@ def test_initial_arm_only_at_start_and_interval_excludes_prior_activity():
 def test_gap_return_to_same_region_preserves_later_observed_crossing():
     d=rows(['center']*3+['missing']+['center']*3+['closed_1']*3)
     b=create_epm_bundle(d,maze(),10,mode='smoothed_centroid',min_dwell_seconds=.2,count_initial_arm=False)
+    assert b.summary.iloc[0]['Closed Arm Entries']==1
     assert b.events.loc[b.events.review_state=='confirmed_proxy','event'].tolist()==['closed_arm_entry']
     assert not b.events.event.eq('possible_transition').any()
 
 
-def test_pending_peek_does_not_emit_review_item_until_dwell():
+def test_short_valid_bridge_can_support_a_flagged_provisional_entry():
     d=rows(['center']*3+['missing']+['closed_1']+['missing']+['closed_1']*2)
     b=create_epm_bundle(d,maze(),10,mode='smoothed_centroid',min_dwell_seconds=.2,count_initial_arm=False)
-    possible=b.events.loc[b.events.review_state=='requires_manual_review']
-    assert len(possible)==1
-    assert int(possible.iloc[0].frame_index)==6
-    assert b.summary.iloc[0]['Closed Arm Entries']==0
+    inferred=b.events.loc[b.events.review_state=='inferred_provisional']
+    assert len(inferred)==1
+    assert int(inferred.iloc[0].frame_index)==3
+    assert b.summary.iloc[0]['Closed Arm Entries']==1
 
 
-def test_smoothing_disagreement_is_unknown_for_occupancy_and_entry():
+def test_smoothing_disagreement_uses_neighboring_observations_with_qc_flag():
     d=rows(['center']*3+['closed_2']*3)
     d.loc[3,'smoothed_x']=100
     b=create_epm_bundle(d,maze(),10,mode='smoothed_centroid',min_dwell_seconds=.2)
-    assert b.per_frame.loc[3,'region']=='unclassified'
-    assert b.per_frame.loc[3,'entry_region']=='unclassified'
+    assert b.per_frame.loc[3,'region']=='closed_2'
+    assert b.per_frame.loc[3,'entry_region']=='closed_2'
     assert bool(b.per_frame.loc[3,'centroid_disagreement'])
-    assert b.region_times.set_index('region').loc['unclassified','frames']==1
-    assert b.events.loc[b.events.review_state=='confirmed_proxy','event'].tolist()==['closed_arm_entry']
+    assert bool(b.per_frame.loc[3,'assignment_uncertain'])
+    assert b.region_times.set_index('region').loc['unclassified','frames']==0
+    assert b.summary.iloc[0]['Closed Arm Entries']==1
+    assert b.events.loc[b.events.review_state=='inferred_provisional','event'].tolist()==['closed_arm_entry']
+
+
+def test_short_arm_peek_is_center_time_without_arm_or_return_entry():
+    d=rows(['center']*5+['open_1']*2+['center']*5)
+    b=create_epm_bundle(d,maze(),10,mode='smoothed_centroid',count_initial_arm=False)
+    assert b.summary.iloc[0]['Open Arm Entries']==0
+    assert b.summary.iloc[0]['Center Entry']==0
+    assert b.region_times.set_index('region').loc['center','frames']==12
+    assert b.per_frame.loc[5:6,'peek_reassigned_to_center'].all()
+
+
+def test_one_second_arm_and_point_one_second_center_entry():
+    d=rows(['center']*5+['open_1']*10+['center']*2)
+    b=create_epm_bundle(d,maze(),10,mode='smoothed_centroid',count_initial_arm=False)
+    assert b.summary.iloc[0]['Open Arm Entries']==1
+    assert b.summary.iloc[0]['Center Entry']==1
+    assert b.region_times.set_index('region').loc['open_1','frames']==10
+
+
+def test_missing_frames_get_position_but_impossible_diagonal_is_not_interpolated():
+    d=rows(['open_1']*3+['missing']+['closed_2']*3)
+    b=create_epm_bundle(d,maze(),10,mode='smoothed_centroid',count_initial_arm=False)
+    assert b.per_frame.loc[3,'region']=='open_1'
+    assert b.per_frame.loc[3,'assignment_method']=='held_previous'
+    assert bool(b.per_frame.loc[3,'assignment_uncertain'])
 
 
 def test_saved_calibration_rejects_wrong_recording():

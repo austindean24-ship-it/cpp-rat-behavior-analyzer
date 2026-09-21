@@ -101,13 +101,14 @@ def _render_results(results: dict) -> None:
     st.subheader("EPM results")
     qc_values = results["qc"].set_index("metric")["value"]
     st.error(
-        f'Needs manual review · body occupancy coverage {float(qc_values["scored_coverage_percent"]):.1f}% · '
+        f'Needs manual review · assigned body time {float(qc_values["scored_coverage_percent"]):.1f}% · '
+        f'{int(qc_values["inferred_frames"])} inferred frames · '
         f'{float(qc_values["unclassified_seconds"]):.1f} s unclassified · '
         f'{int(qc_values.get("possible_transitions_for_review", 0))} possible transitions. '
         "Review the raw video and event table before using any measurement."
     )
     summary = results["summary"]
-    st.caption("Entries are provisional centroid or motion-proxy crossings; they are not anatomical paw or head measurements. Review every event and possible transition against the raw video.")
+    st.caption("Entries are provisional centroid or motion-proxy crossings. One-second arm dwell and 0.1-second center dwell are fixed. Review inferred frames and events against the raw video.")
     st.dataframe(summary, hide_index=True, use_container_width=True)
     time_cols = st.columns(3)
     time_cols[0].metric("Open arm", f'{int(summary.iloc[0]["Open Arm Time (whole seconds)"])} s')
@@ -219,9 +220,9 @@ def _render_epm_sidebar() -> None:
   </ol>
   <div class="epm-sidebar-section">Analysis</div>
   <ol class="epm-sidebar-list" start="6">
-    <li><strong>Choose an entry proxy.</strong> Smoothed body centroid is the pilot default. Set dwell time and initial-arm counting to your lab rule.</li>
+    <li><strong>Choose an entry proxy.</strong> Smoothed body centroid is the pilot default. Arm entry requires 1 second; center entry requires 0.1 second.</li>
     <li><strong>Run analysis.</strong> Keep the page open while tracking and optional video export finish.</li>
-    <li><strong>Review results.</strong> Check unknown time, rejected candidates, the event table, and raw versus accepted markers in the annotated video.</li>
+    <li><strong>Review results.</strong> Check inferred frames, rejected candidates, the event table, and observed versus inferred markers in the annotated video.</li>
     <li><strong>Download outputs.</strong> Save the six-column summary and review files.</li>
   </ol>
   <div class="epm-sidebar-note">Confirm automated counts against reviewed video before using them as research measurements.</div>
@@ -232,6 +233,12 @@ def _render_epm_sidebar() -> None:
     with st.sidebar.expander("Changelog", expanded=False):
         st.markdown(
             """
+**September 21, 2026 — temporal scoring revision**
+
+- Fixed arm dwell at 1 second and center dwell at 0.1 second; brief arm peeks count as center time.
+- Added trajectory and neighboring-frame assignments for uncertain body positions, with per-frame QC flags and a jump ceiling.
+- Marked inferred body positions separately in the annotated video.
+
 **September 21, 2026 — controlled pilot candidate**
 
 - Defaulted provisional entries to smoothed body centroid while scoring body occupancy separately from optional entry proxies.
@@ -266,7 +273,8 @@ def main() -> None:
         "Body time uses a tracked centroid; entries use the selected provisional proxy crossing from center into an arm. "
         "A return from an arm into center counts as a center entry. "
         "A stable arm occupied at the start can count as one initial entry. "
-        "Uncertain body locations add unknown time. Unobserved transitions enter a review queue, not the entry counts."
+        "Arm entries require 1 second; center entries require 0.1 second. Brief arm peeks count as center time. "
+        "Missing body positions are inferred from neighboring frames and flagged for review."
     )
 
     with st.container(border=True):
@@ -419,11 +427,8 @@ def main() -> None:
         st.subheader("4 · Choose scoring and run")
         point_label = st.selectbox("Provisional entry proxy", list(POINT_OPTIONS), key="epm_point")
         st.caption("Smoothed body centroid is the pilot default. The optional head point uses motion direction, not anatomical pose or four-paw tracking.")
-        dwell = float(st.number_input(
-            "Minimum continuous time in a new region before an entry counts (seconds)",
-            min_value=0.0, max_value=2.0, value=0.3, step=0.05, key="epm_dwell",
-            help="Set to 0 for an immediate boundary crossing. The default requires about nine frames at 30 FPS.",
-        ))
+        dwell = 1.0
+        st.caption("Fixed entry rules: 1.0 second in an arm, 0.1 second in center. Short arm peeks count as center time.")
         initial_entry = st.checkbox(
             "Count the initial arm if the rat starts in an arm",
             value=True, key="epm_initial_entry",
@@ -447,7 +452,7 @@ def main() -> None:
         "analysis_end_frame_exclusive": end_frame,
         "scoring_point": POINT_OPTIONS[point_label],
         "occupancy_point": "tracked_smoothed_body_centroid",
-        "scoring_version": "epm_pilot_centroid_v3",
+        "scoring_version": "epm_temporal_centroid_v4",
         "min_dwell_seconds": dwell,
         "count_initial_arm": initial_entry,
         "export_annotated_video": export_video,

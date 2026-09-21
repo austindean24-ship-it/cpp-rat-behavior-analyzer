@@ -56,7 +56,7 @@ def test_external_motion_shadow_and_single_frame_glare_cannot_score() -> None:
     assert state.update([], 1)[0] is None
 
 
-def test_untrusted_frames_have_unknown_time_and_no_proxy_fallback() -> None:
+def test_untrusted_frames_have_inferred_time_and_qc_flag() -> None:
     rows = tracking_rows(["center", "center", "open_1", "open_1", "open_1"])
     rows.loc[2, "low_confidence"] = True
     rows.loc[3, "tracking_status"] = "carried_forward"
@@ -64,10 +64,10 @@ def test_untrusted_frames_have_unknown_time_and_no_proxy_fallback() -> None:
     rows["head_estimate_source"] = "motion_heading"
     rows.loc[4, "head_estimate_source"] = "centroid_fallback"
     bundle = create_epm_bundle(rows, calibration(), 10, min_dwell_seconds=0.1)
-    assert bundle.region_times.set_index("region").loc["unclassified", "frames"] == 2
+    assert bundle.region_times.set_index("region").loc["unclassified", "frames"] == 0
     assert bundle.per_frame.loc[4, "entry_point_source"] == "missing_head_orientation"
     assert bundle.summary.loc[0, "Open Arm Entries"] == 0
-    assert bundle.qc_metrics.set_index("metric").loc["unclassified_frames", "value"] == 2
+    assert bundle.qc_metrics.set_index("metric").loc["inferred_frames", "value"] == 2
     assert bundle.qc_metrics.set_index("metric").loc["missing_head_proxy_frames", "value"] == 1
 
 
@@ -101,7 +101,8 @@ def test_interval_excludes_setup_frames_and_preserves_total_with_unknown() -> No
     )
     assert bundle.per_frame.loc[:3, "region"].eq("excluded").all()
     assert bundle.summary.loc[0, "Closed Arm Entries"] == 0
-    assert bundle.region_times.set_index("region").loc["unclassified", "frames"] == 1
+    assert bundle.region_times.set_index("region").loc["unclassified", "frames"] == 0
+    assert bundle.per_frame.loc[9, "assignment_uncertain"]
     assert bundle.qc_metrics.set_index("metric").loc["analysis_duration_seconds", "value"] == 0.8
 
 
@@ -111,7 +112,8 @@ def test_segment_change_never_invents_a_return_from_an_unseen_arm() -> None:
     bundle = create_epm_bundle(rows, calibration(), 10, min_dwell_seconds=0.2)
     assert bundle.events.loc[bundle.events.review_state == "confirmed_proxy", "event"].tolist() == ["open_arm_entry"]
     assert bundle.events.loc[bundle.events.review_state == "requires_manual_review", "event"].tolist() == ["possible_transition"]
-    assert bundle.region_times.set_index("region").loc["unclassified", "frames"] == 1
+    assert bundle.region_times.set_index("region").loc["unclassified", "frames"] == 0
+    assert bundle.per_frame.loc[4, "assignment_uncertain"]
 
 
 def test_trail_refuses_gaps_and_off_maze_diagonals() -> None:
