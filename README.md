@@ -350,7 +350,9 @@ The original CPP workflow and its output files are unchanged.
 
 ### EPM workflow
 
-1. Upload one fixed-camera EPM video. Check its FPS and duration.
+1. Upload one fixed-camera EPM video. Check its FPS and duration. The analysis
+   interval defaults to the entire recording; set start/end only when a
+   reviewed setup/removal interval justifies trimming. The bounds are exported.
 2. Choose a clear calibration frame (the first frame may show the experimenter),
    then left-click the corners of each of five walking-surface polygons and
    **right-click to close** each polygon. Draw center, two open
@@ -365,36 +367,45 @@ The original CPP workflow and its output files are unchanged.
 5. Run analysis. Review QC warnings, the event table, and the annotated MP4
    before using results.
 
-The maze-wide tracking mask is the union of the five polygons. The tracker
-returns coordinates in the original video frame. Behavioral labels are assigned
-after tracking, using the individual polygons.
+The EPM-only tracker restricts foreground extraction to the five walking
+surfaces before morphology. It rejects implausible raw jumps, incompatible
+contour sizes, and off-maze paths before changing its accepted state. Following
+a gap it requires multiple coherent candidates to reacquire. Rejected and
+reacquiring frames remain unclassified; no location is carried forward for
+scoring. The CPP tracker and scoring path are unchanged.
 
 An open or closed arm entry is a confirmed transition from center into that
 arm. A return from an arm into center is a center entry. Consecutive frames in
 one arm count once. A brief center or arm label shorter than the chosen dwell
-setting is not a new event. Missing, outside, carried-forward, and low-confidence
-frames break event continuity; they cannot create an entry. The initial arm can
-optionally count once. The motion-based head-and-shoulders point is a proxy,
-not anatomical pose estimation.
+setting is not a new event. Missing, outside, rejected, and low-confidence
+frames break event continuity and contribute to unknown time, never entries.
+A narrow boundary band is also unclassified for time, while continuous
+observation across it can still support a confirmed transition. The initial
+arm can optionally count once. The motion-based head-and-shoulders point is
+a proxy, not anatomical pose estimation; if it is unavailable, the default
+mode records unknown time instead of silently using the body centroid.
 
 ### EPM outputs
 
 EPM results are stored under `runtime_data/epm_results/`. The main
 `summary.csv` has the six requested columns: Open Arm Entries, Closed Arm
 Entries, Center Entry, and whole-second time in open arms, closed arms, and
-center. Whole seconds use largest-remainder rounding so the reported classes
-and unclassified time add to rounded video duration. The region and QC files
-retain fractional seconds and unclassified frames.
+center. Whole seconds use largest-remainder rounding so the three classes
+and unclassified time add to the rounded selected interval. The region and QC
+files retain fractional seconds, unclassified frames, accepted coverage,
+rejected jumps, and a needs-manual-review status.
 
 Other exports are `events.csv`, `region_times.csv`,
 `per_frame_assignments.csv`, `tracking_raw.csv`, `qc_metrics.csv`,
 `warnings.txt`, `calibration_and_settings.json`, and optional
 `annotated_output.mp4`. The annotated video shows the regions, scoring point,
-trajectory, tracking status, and confirmed events.
+continuous accepted trajectory, rejected raw candidate markers, tracking
+status/reason, and confirmed events. Lines stop at unknown gaps and are not
+drawn across off-maze floor.
 
-The EPM event rule and polygons require validation against lab-scored sessions
-before using automated values as research measurements. The current tests cover
-geometry, scoring-point selection, entry transitions, ambiguous frames,
-rounding, and tracking on synthetic video; they do not establish accuracy on
-every real camera setup. The app's QC warnings and annotated video are essential
-for this review.
+Automated EPM values remain in needs-manual-review status until the lab checks
+raw video against accepted points and individual events. The diagnostic
+calibration reconstructed from an annotated MP4 is not an exact substitute
+for the original saved polygon/settings JSON. Synthetic tests check rejection
+and continuity but do not establish a numerical accuracy tolerance on the
+user's videos.

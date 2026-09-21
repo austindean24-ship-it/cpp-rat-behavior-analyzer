@@ -23,6 +23,7 @@ from epm import (
     numbered_canvas_overlay,
 )
 from epm_video import write_annotated_epm_video
+from epm_tracker import EPMTracker
 from io_utils import (
     ensure_directory,
     export_dataframe_csv,
@@ -30,7 +31,7 @@ from io_utils import (
     get_video_metadata,
     save_uploaded_video,
 )
-from tracker import SingleRatTracker, TrackingConfig
+from tracker import TrackingConfig
 
 APP_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = ensure_directory(APP_DIR / "runtime_data" / "epm_uploads")
@@ -83,6 +84,8 @@ def _load_upload(uploaded_file) -> None:
         st.session_state["epm_video_signature"] = signature
         st.session_state["epm_canvas_version"] = st.session_state.get("epm_canvas_version", 0) + 1
         st.session_state.pop("epm_calibration_seconds", None)
+        st.session_state.pop("epm_start_seconds", None)
+        st.session_state.pop("epm_end_seconds", None)
         for name in REGION_ORDER:
             st.session_state.pop(f"epm_map_{name}", None)
         _clear_results()
@@ -95,6 +98,12 @@ def _download(label: str, path: str | Path, mime: str) -> None:
 
 def _render_results(results: dict) -> None:
     st.subheader("EPM results")
+    qc_values = results["qc"].set_index("metric")["value"]
+    st.error(
+        f'Needs manual review · accepted coverage {float(qc_values["scored_coverage_percent"]):.1f}% · '
+        f'{float(qc_values["unclassified_seconds"]):.1f} s unclassified. '
+        "Review the raw video and event table before using any measurement."
+    )
     summary = results["summary"]
     st.dataframe(summary, hide_index=True, use_container_width=True)
     time_cols = st.columns(3)
@@ -200,15 +209,16 @@ def _render_epm_sidebar() -> None:
   <div class="epm-sidebar-section">Setup</div>
   <ol class="epm-sidebar-list">
     <li><strong>Upload video.</strong> Check the duration and FPS.</li>
+    <li><strong>Set the scoring interval.</strong> Leave the full video by default, or record justified start/end times after checking setup and removal.</li>
     <li><strong>Choose a clear frame.</strong> Select a calibration time without the experimenter over the maze.</li>
     <li><strong>Draw five regions.</strong> Outline center, two open arms, and two closed arms. Right-click to close each polygon, then Send to Streamlit.</li>
     <li><strong>Check labels.</strong> Map the numbered polygons and review their boundaries.</li>
   </ol>
   <div class="epm-sidebar-section">Analysis</div>
-  <ol class="epm-sidebar-list" start="5">
+  <ol class="epm-sidebar-list" start="6">
     <li><strong>Use the head-and-shoulders proxy.</strong> Set dwell time and initial-arm counting to your lab rule.</li>
     <li><strong>Run analysis.</strong> Keep the page open while tracking and optional video export finish.</li>
-    <li><strong>Review results.</strong> Check the event table, QC warnings, and annotated video.</li>
+    <li><strong>Review results.</strong> Check unknown time, rejected candidates, the event table, and raw versus accepted markers in the annotated video.</li>
     <li><strong>Download outputs.</strong> Save the six-column summary and review files.</li>
   </ol>
   <div class="epm-sidebar-note">Confirm automated counts against reviewed video before using them as research measurements.</div>
@@ -220,6 +230,12 @@ def _render_epm_sidebar() -> None:
         st.markdown(
             """
 **September 20, 2026**
+
+**EPM reliability review (local)**
+
+- Added EPM-only candidate gating, explicit reacquisition, unknown time, and an analysis interval.
+- Separated rejected raw candidates from accepted scoring points and broke trails at gaps.
+- Added a manual-review status and expanded per-frame/event QC.
 
 **EPM analyzer added**
 
@@ -236,12 +252,12 @@ def main() -> None:
     _render_epm_sidebar()
     st.title("Elevated Plus Maze Analyzer")
     st.caption("Upload one fixed-camera session, choose a clear calibration frame, draw five maze regions, and score the rat.")
-    st.caption("Pilot scoring: review the event table and annotated video before using results as research measurements.")
+    st.caption("Pilot scoring: uncertain positions are unclassified; manually verify events and timing before research use.")
     st.info(
         "Entries use the selected scoring point crossing from center into an arm. "
         "A return from an arm into center counts as a center entry. "
         "A stable arm occupied at the start can count as one initial entry. "
-        "Low-confidence or missing frames cannot create entries."
+        "Low-confidence, rejected, or missing frames create neither entries nor maze time."
     )
 
     with st.container(border=True):
@@ -253,6 +269,8 @@ def main() -> None:
             st.session_state["epm_video_path"] = None
             st.session_state["epm_video_signature"] = None
             st.session_state.pop("epm_calibration_seconds", None)
+            st.session_state.pop("epm_start_seconds", None)
+            st.session_state.pop("epm_end_seconds", None)
             st.session_state["epm_upload_version"] = st.session_state.get("epm_upload_version", 0) + 1
             st.session_state["epm_canvas_version"] = st.session_state.get("epm_canvas_version", 0) + 1
             _clear_results()
@@ -277,6 +295,23 @@ def main() -> None:
     fps = float(metadata.fps)
     if manual_fps:
         fps = float(st.number_input("Actual FPS", min_value=0.1, max_value=240.0, value=float(metadata.fps), step=0.1, key="epm_fps"))
+
+    duration = metadata.frame_count / fps
+    st.caption("The scoring interval defaults to the whole video. Trim setup/end frames only after checking the raw video; the chosen bounds are exported.")
+    start_seconds = float(st.number_input(
+        "Analysis start (seconds, inclusive)", min_value=0.0, max_value=float(duration),
+        value=0.0, step=1.0, key="epm_start_seconds",
+    ))
+    end_seconds = float(st.number_input(
+        "Analysis end (seconds, exclusive)", min_value=0.0, max_value=float(duration),
+        value=float(duration), step=1.0, key="epm_end_seconds",
+    ))
+    start_frame, end_frame = round(start_seconds * fps), round(end_seconds * fps)
+    valid_interval = 0 <= start_frame < end_frame <= metadata.frame_count
+    if not valid_interval:
+        st.error("Choose an end after the start, within the video.")
+    else:
+        st.caption(f"Selected interval: frames {start_frame:,}–{end_frame - 1:,} ({(end_frame - start_frame) / fps:.2f} s).")
 
     max_frame = max(0, metadata.frame_count - 1)
     max_seconds = max_frame / metadata.fps
@@ -370,7 +405,7 @@ def main() -> None:
         draw_trajectory = st.checkbox("Show trajectory in QC video", value=True, key="epm_trajectory")
         if calibration is None:
             st.warning("Complete and verify all five polygons before running analysis.")
-        run = st.button("Run EPM analysis", type="primary", disabled=calibration is None)
+        run = st.button("Run EPM analysis", type="primary", disabled=calibration is None or not valid_interval)
 
     if calibration is None:
         return
@@ -378,6 +413,10 @@ def main() -> None:
         "video_signature": st.session_state["epm_video_signature"],
         "calibration": calibration.to_dict(),
         "timing_fps": fps,
+        "analysis_start_seconds": start_seconds,
+        "analysis_end_seconds": end_seconds,
+        "analysis_start_frame": start_frame,
+        "analysis_end_frame_exclusive": end_frame,
         "scoring_point": POINT_OPTIONS[point_label],
         "min_dwell_seconds": dwell,
         "count_initial_arm": initial_entry,
@@ -389,15 +428,18 @@ def main() -> None:
     if run:
         progress = st.progress(0, text="Preparing EPM tracking")
         try:
-            tracker = SingleRatTracker(EPM_TRACKING_CONFIG)
+            tracker = EPMTracker(EPM_TRACKING_CONFIG)
 
             def track_progress(current: int, total: int) -> None:
                 if current % 120 == 0 or current == total:
                     progress.progress(min(70, 5 + int(65 * current / max(total, 1))), text=f"Tracking frame {current:,} of {total:,}")
 
-            tracking = tracker.track_video(video_path, arena_mask=calibration.tracking_mask(), progress_callback=track_progress, fps_override=fps)
+            tracking = tracker.track_video(video_path, calibration=calibration, progress_callback=track_progress, fps_override=fps)
             progress.progress(75, text="Scoring regions and entries")
-            bundle = create_epm_bundle(tracking, calibration, fps, POINT_OPTIONS[point_label], dwell, initial_entry)
+            bundle = create_epm_bundle(
+                tracking, calibration, fps, POINT_OPTIONS[point_label], dwell, initial_entry,
+                analysis_start_seconds=start_seconds, analysis_end_seconds=end_seconds,
+            )
             output_dir = ensure_directory(RESULTS_DIR / f'{video_path.stem}_{datetime.now().strftime("%Y%m%d_%H%M%S")}_{uuid.uuid4().hex[:6]}')
             paths = {
                 "tracking_csv": export_dataframe_csv(tracking, output_dir / "tracking_raw.csv"),
@@ -411,6 +453,14 @@ def main() -> None:
             calibration_json = output_dir / "calibration_and_settings.json"
             calibration_json.write_text(json.dumps(settings, indent=2), encoding="utf-8")
             paths["calibration_json"] = calibration_json
+            flagged_frames = bundle.per_frame.loc[
+                (bundle.per_frame["tracking_status"] != "tracked") | bundle.per_frame["event"].ne("")
+            ]
+            preview = pd.concat([
+                bundle.per_frame.iloc[::max(1, len(bundle.per_frame) // 100)],
+                flagged_frames.head(150),
+                bundle.per_frame.tail(50),
+            ]).sort_values("frame_index").drop_duplicates("frame_index")
             payload = {
                 "signature": signature,
                 "output_dir": str(output_dir),
@@ -419,7 +469,7 @@ def main() -> None:
                 "region_times": bundle.region_times,
                 "qc": bundle.qc_metrics,
                 "warnings": bundle.warnings,
-                "per_frame_preview": bundle.per_frame.head(300),
+                "per_frame_preview": preview,
                 "annotated_video": None,
                 **{name: str(path) for name, path in paths.items()},
             }
