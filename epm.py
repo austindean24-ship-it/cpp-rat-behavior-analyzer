@@ -105,6 +105,22 @@ class EPMCalibration:
         }
 
 
+def calibration_from_saved_settings(
+    settings: Mapping[str, Any], frame_width: int, frame_height: int,
+    video_signature: str | None = None,
+) -> EPMCalibration:
+    """Load the exact saved maze geometry only for the matching recording."""
+    saved_signature = settings.get("video_signature")
+    if saved_signature and video_signature and saved_signature != video_signature:
+        raise ValueError("The saved calibration belongs to a different video. Draw new regions for this recording.")
+    source = settings.get("calibration", settings)
+    if source.get("frame_width") != frame_width or source.get("frame_height") != frame_height:
+        raise ValueError("Saved calibration dimensions differ from this video.")
+    regions = [MazeRegion(item["name"], np.asarray(item["polygon"], dtype=np.float32))
+               for item in source["regions"]]
+    return EPMCalibration(regions, frame_width, frame_height)
+
+
 def extract_epm_polygons(
     canvas_json: Mapping[str, Any],
     image_scale_x: float,
@@ -197,184 +213,6 @@ def draw_epm_overlay(frame: np.ndarray, calibration: EPMCalibration) -> np.ndarr
     return output
 
 
-def _scoring_point(row: Any, mode: str) -> tuple[tuple[float, float] | None, str]:
-    if mode == "head_shoulders":
-        source = getattr(row, "head_estimate_source", "provided_head_proxy")
-        if source not in {"motion_heading", "provided_head_proxy"}:
-            return None, str(source)
-        columns = (
-            ("smoothed_head_shoulder_x", "smoothed_head_shoulder_y"),
-            ("head_shoulder_x", "head_shoulder_y"),
-        )
-    elif mode == "smoothed_centroid":
-        columns = (("smoothed_x", "smoothed_y"), ("centroid_x", "centroid_y"))
-    elif mode == "centroid":
-        columns = (("centroid_x", "centroid_y"),)
-    else:
-        raise ValueError(f"Unknown scoring mode: {mode}")
-    for x_name, y_name in columns:
-        x, y = getattr(row, x_name, np.nan), getattr(row, y_name, np.nan)
-        if pd.notna(x) and pd.notna(y):
-            return (float(x), float(y)), x_name.removesuffix("_x")
-    return None, "missing_proxy"
-
-
-def assign_epm_frames(
-    tracking_df: pd.DataFrame, calibration: EPMCalibration,
-    mode: str = "head_shoulders", boundary_margin_px: float = 2.0,
-) -> pd.DataFrame:
-    if boundary_margin_px < 0:
-        raise ValueError("Boundary margin cannot be negative.")
-    records: list[dict[str, Any]] = []
-    for row in tracking_df.itertuples(index=False):
-        eligible = (
-            getattr(row, "tracking_status", None) == "tracked"
-            and not bool(getattr(row, "low_confidence", False))
-            and not bool(getattr(row, "carried_forward", False))
-        )
-        point, source = _scoring_point(row, mode) if eligible else (None, "rejected_tracking")
-        record = row._asdict()
-        record["assignment_x"] = point[0] if point else np.nan
-        record["assignment_y"] = point[1] if point else np.nan
-        record["assignment_point_mode"] = mode
-        record["assignment_point_source"] = source
-        if point is None:
-            label, boundary, candidate_label, distance = "unclassified", False, "", np.nan
-        else:
-            distances = [region.signed_distance(point) for region in calibration.regions]
-            inside = [i for i, distance in enumerate(distances) if distance >= 0]
-            candidate_label = calibration.regions[inside[0]].name if inside else "outside"
-            distance = distances[inside[0]] if inside else max(distances)
-            boundary = len(inside) > 1 or abs(distance) < boundary_margin_px
-            label = "unclassified" if boundary else candidate_label
-        record["candidate_region"] = candidate_label
-        record["boundary_distance_px"] = distance
-        record["region"] = label
-        record["arm_type"] = "open" if label.startswith("open_") else "closed" if label.startswith("closed_") else label
-        record["on_boundary"] = boundary
-        record["inside_arena"] = label in REGION_ORDER
-        record["boundary_hold"] = bool(boundary and eligible)
-        records.append(record)
-    return pd.DataFrame(records)
-
-
-def _whole_seconds(frame_counts: list[int], fps: float) -> list[int]:
-    """Largest remainders make reported whole seconds sum to rounded video time."""
-    exact = [count / fps for count in frame_counts]
-    whole = [math.floor(value) for value in exact]
-    target = math.floor(sum(exact) + 0.5)
-    order = sorted(range(len(exact)), key=lambda i: (-(exact[i] - whole[i]), i))
-    for index in order[: target - sum(whole)]:
-        whole[index] += 1
-    return whole
-
-
-def detect_epm_events(
-    per_frame: pd.DataFrame,
-    fps: float,
-    min_dwell_seconds: float = 0.3,
-    count_initial_arm: bool = True,
-) -> tuple[pd.DataFrame, pd.DataFrame, int]:
-    """Only uninterrupted observed center/arm crossings can create entries."""
-    if fps <= 0 or min_dwell_seconds < 0:
-        raise ValueError("FPS must be positive and minimum dwell cannot be negative.")
-    dwell_frames = max(1, math.ceil(min_dwell_seconds * fps))
-    data = per_frame.copy()
-    data["event"] = ""
-    events: list[dict[str, Any]] = []
-    stable: str | None = None
-    candidate: str | None = None
-    candidate_start = -1
-    candidate_count = 0
-    first_eligible_position: int | None = None
-    included_positions = np.flatnonzero(data["analysis_included"].to_numpy()) if "analysis_included" in data else np.arange(len(data))
-    interval_start_position = int(included_positions[0]) if len(included_positions) else 0
-    first_baseline_committed = False
-    skipped_direct_arm_changes = 0
-    segment = None
-
-    def commit(destination: str, start: int, confirmed: int, source: str | None) -> None:
-        nonlocal skipped_direct_arm_changes, first_baseline_committed
-        event_type = ""
-        if source is None:
-            if (not first_baseline_committed and count_initial_arm and destination != "center"
-                    and first_eligible_position is not None
-                    and first_eligible_position - interval_start_position <= dwell_frames):
-                event_type = "open_arm_entry" if destination.startswith("open_") else "closed_arm_entry"
-        elif source == "center" and destination.startswith("open_"):
-            event_type = "open_arm_entry"
-        elif source == "center" and destination.startswith("closed_"):
-            event_type = "closed_arm_entry"
-        elif source != "center" and destination == "center":
-            event_type = "center_entry"
-        elif source != "center" and destination != "center":
-            skipped_direct_arm_changes += 1
-        first_baseline_committed = True
-        if event_type:
-            first, last = data.iloc[start], data.iloc[confirmed]
-            events.append({
-                "event": event_type,
-                "from_region": source or "start",
-                "to_region": destination,
-                "frame_index": int(first["frame_index"]),
-                "time_seconds": float(first["frame_index"]) / fps,
-                "confirmed_frame_index": int(last["frame_index"]),
-                "confirmed_time_seconds": float(last["frame_index"]) / fps,
-                "supporting_frames": confirmed - start + 1,
-                "track_segment_id": first.get("track_segment_id", np.nan),
-                "point_source": first.get("assignment_point_source", ""),
-                "evidence": "continuous_observed_frames",
-            })
-            data.at[data.index[confirmed], "event"] = event_type
-
-    for position, (_, row) in enumerate(data.iterrows()):
-        region = str(row["region"])
-        current_segment = row.get("track_segment_id", np.nan)
-        if pd.notna(current_segment) and segment is not None and current_segment != segment:
-            stable = candidate = None
-            candidate_count = 0
-        if pd.notna(current_segment):
-            segment = current_segment
-        if bool(row.get("boundary_hold", False)):
-            candidate = None
-            candidate_count = 0
-            continue
-        eligible = (
-            region in REGION_ORDER
-            and row.get("tracking_status") == "tracked"
-            and not bool(row.get("low_confidence", False))
-            and not bool(row.get("carried_forward", False))
-            and bool(row.get("analysis_included", True))
-        )
-        if not eligible:
-            stable = candidate = None
-            candidate_count = 0
-            continue
-        if first_eligible_position is None:
-            first_eligible_position = position
-        if region == stable:
-            candidate = None
-            candidate_count = 0
-            continue
-        if region != candidate:
-            candidate = region
-            candidate_start = position
-            candidate_count = 1
-        else:
-            candidate_count += 1
-        if candidate_count >= dwell_frames:
-            commit(region, candidate_start, position, stable)
-            stable = region
-            candidate = None
-            candidate_count = 0
-    event_columns = [
-        "event", "from_region", "to_region", "frame_index", "time_seconds",
-        "confirmed_frame_index", "confirmed_time_seconds", "supporting_frames",
-        "track_segment_id", "point_source", "evidence",
-    ]
-    return data, pd.DataFrame(events, columns=event_columns), skipped_direct_arm_changes
-
-
 @dataclass
 class EPMBundle:
     per_frame: pd.DataFrame
@@ -385,97 +223,280 @@ class EPMBundle:
     warnings: list[str]
 
 
-def create_epm_bundle(
-    tracking_df: pd.DataFrame,
-    calibration: EPMCalibration,
-    fps: float,
-    mode: str = "head_shoulders",
-    min_dwell_seconds: float = 0.3,
-    count_initial_arm: bool = True,
-    analysis_start_seconds: float = 0.0,
-    analysis_end_seconds: float | None = None,
-    boundary_margin_px: float = 2.0,
-) -> EPMBundle:
-    if fps <= 0 or tracking_df.empty:
-        raise ValueError("A video with frames and positive FPS is required.")
-    start_frame = round(analysis_start_seconds * fps)
-    end_frame = len(tracking_df) if analysis_end_seconds is None else round(analysis_end_seconds * fps)
-    if not 0 <= start_frame < end_frame <= len(tracking_df):
-        raise ValueError("Analysis start/end must select a nonempty interval inside the video.")
-    assigned = assign_epm_frames(tracking_df, calibration, mode, boundary_margin_px)
-    assigned["analysis_included"] = assigned["frame_index"].between(start_frame, end_frame - 1)
-    assigned.loc[~assigned["analysis_included"], ["region", "arm_type"]] = "excluded"
-    per_frame, events, skipped = detect_epm_events(assigned, fps, min_dwell_seconds, count_initial_arm)
-    selected = per_frame.loc[per_frame["analysis_included"]]
-    counts = {name: int((selected["region"] == name).sum()) for name in REGION_ORDER}
-    open_frames = counts["open_1"] + counts["open_2"]
-    closed_frames = counts["closed_1"] + counts["closed_2"]
-    center_frames = counts["center"]
-    unknown_frames = len(selected) - open_frames - closed_frames - center_frames
-    open_seconds, closed_seconds, center_seconds, unknown_seconds = _whole_seconds(
-        [open_frames, closed_frames, center_frames, unknown_frames], fps
-    )
-    event_counts = events["event"].value_counts()
+def _region(point, calibration: EPMCalibration, margin: float):
+    if point is None or not np.isfinite(point).all():
+        return 'unclassified', '', False
+    distances = [r.signed_distance(point) for r in calibration.regions]
+    inside = [i for i, d in enumerate(distances) if d >= 0]
+    if len(inside) > 1:
+        return 'unclassified', calibration.regions[inside[0]].name, True
+    if not inside:
+        return 'outside', '', False
+    label = calibration.regions[inside[0]].name
+    return ('unclassified' if abs(distances[inside[0]]) < margin else label), label, abs(distances[inside[0]]) < margin
+
+
+def _xy(row, cols):
+    for xname, yname in cols:
+        x = row.get(xname, np.nan)
+        y = row.get(yname, np.nan)
+        if pd.notna(x) and pd.notna(y) and np.isfinite(float(x)) and np.isfinite(float(y)):
+            return float(x), float(y), xname.removesuffix('_x')
+    return np.nan, np.nan, 'missing'
+
+
+def assign_epm_frames(tracking_df, calibration: EPMCalibration, mode='head_shoulders', boundary_margin_px=2.0):
+    if mode not in {'head_shoulders', 'smoothed_centroid', 'centroid'}:
+        raise ValueError(f'Unknown EPM entry proxy: {mode}')
+    if boundary_margin_px < 0:
+        raise ValueError('Boundary margin cannot be negative')
+    records = []
+    for row in tracking_df.to_dict('records'):
+        accepted = row.get('tracking_status') == 'tracked' and not bool(row.get('low_confidence', False)) and not bool(row.get('carried_forward', False))
+        cx, cy, body_source = _xy(row, [('smoothed_x', 'smoothed_y'), ('centroid_x', 'centroid_y')]) if accepted else (np.nan, np.nan, 'missing')
+        body_point = (cx, cy) if np.isfinite(cx) else None
+        body_region, body_candidate, body_boundary = _region(body_point, calibration, boundary_margin_px)
+        raw_x, raw_y, _ = _xy(row, [('centroid_x', 'centroid_y')]) if accepted else (np.nan, np.nan, 'missing')
+        raw_region, _, _ = _region((raw_x, raw_y) if np.isfinite(raw_x) else None, calibration, boundary_margin_px)
+        centroid_disagreement = body_region in REGION_ORDER and raw_region != body_region
+        if centroid_disagreement:
+            body_region = 'unclassified'
+            body_boundary = True
+        if not accepted:
+            body_region = 'unclassified'
+        if mode == 'head_shoulders':
+            proxy_valid = row.get('head_estimate_source', 'provided_head_proxy') in {'motion_heading', 'provided_head_proxy'}
+            ex, ey, entry_source = _xy(row, [('smoothed_head_shoulder_x', 'smoothed_head_shoulder_y'), ('head_shoulder_x', 'head_shoulder_y')]) if accepted and proxy_valid else (np.nan, np.nan, 'missing_head_orientation')
+        elif mode == 'smoothed_centroid':
+            ex, ey, entry_source = cx, cy, body_source
+        else:
+            ex, ey, entry_source = _xy(row, [('centroid_x', 'centroid_y')]) if accepted else (np.nan, np.nan, 'missing')
+        entry_region, entry_candidate, entry_boundary = _region((ex, ey) if np.isfinite(ex) else None, calibration, boundary_margin_px)
+        if mode == 'smoothed_centroid' and centroid_disagreement:
+            entry_region = 'unclassified'
+            entry_boundary = True
+        row.update({
+            'assignment_x': cx, 'assignment_y': cy, 'assignment_point_mode': 'body_occupancy',
+            'assignment_point_source': body_source, 'entry_assignment_x': ex, 'entry_assignment_y': ey,
+            'entry_point_mode': mode, 'entry_point_source': entry_source,
+            'entry_region': entry_region, 'entry_candidate_region': entry_candidate,
+            'entry_boundary': entry_boundary,
+            'raw_body_region': raw_region, 'centroid_disagreement': centroid_disagreement,
+            'candidate_region': body_candidate, 'region': body_region,
+            'arm_type': 'open' if body_region.startswith('open_') else 'closed' if body_region.startswith('closed_') else body_region,
+            'on_boundary': body_boundary, 'inside_arena': body_region in REGION_ORDER,
+            'boundary_hold': bool(entry_boundary and accepted),
+            'body_position_valid': bool(accepted and body_region in REGION_ORDER),
+            'anatomical_entry_point_valid': False,  # motion heading is NOT anatomy
+        })
+        records.append(row)
+    return pd.DataFrame.from_records(records)
+
+
+def detect_epm_events(assigned, fps, min_dwell_seconds=0.3, count_initial_arm=True):
+    """Only uninterrupted observed proxy transitions contribute to counts.
+
+    A gap preserves the last region as reviewer context, never as evidence of a
+    crossing. Reviewer items are emitted after target dwell, not for every peek.
+    """
+    if fps <= 0 or min_dwell_seconds < 0:
+        raise ValueError("FPS must be positive and dwell must be nonnegative")
+    dwell = max(1, math.ceil(fps * min_dwell_seconds))
+    data = assigned.copy()
+    data["event"] = ""
+    data["review_event"] = ""
+    events = []
+    included = np.flatnonzero(data["analysis_included"].to_numpy()) if "analysis_included" in data else np.arange(len(data))
+    interval_start = int(included[0]) if len(included) else 0
+    stable = pending = None
+    pending_start = -1
+    pending_count = 0
+    pending_uncertain = False
+    interrupted = True
+    last_observed_frame = last_observed_segment = None
+    last_stable_frame = None
+    boundary_frames = 0
+    pending_boundary_frames = 0
+    first_valid = None
+    baselined = False
+    skipped = 0
+
+    def emit(name, source, target, onset, confirmation, review, reason, source_frame, boundary_count):
+        first, last = data.iloc[onset], data.iloc[confirmation]
+        events.append({
+            "event": name, "from_region": source or "start", "to_region": target,
+            "frame_index": int(first["frame_index"]),
+            "time_seconds": float(first["frame_index"]) / fps,
+            "confirmed_frame_index": int(last["frame_index"]),
+            "confirmed_time_seconds": float(last["frame_index"]) / fps,
+            "supporting_frames": confirmation - onset + 1,
+            "source_last_frame_index": source_frame if source_frame is not None else np.nan,
+            "observed_boundary_frames": boundary_count,
+            "track_segment_id": first.get("track_segment_id", np.nan),
+            "point_source": first.get("entry_point_source", ""),
+            "evidence": reason,
+            "review_state": review,
+        })
+        field = "event" if review == "confirmed_proxy" else "review_event"
+        data.at[data.index[confirmation], field] = name
+
+    for pos, row in enumerate(data.to_dict("records")):
+        frame = int(row["frame_index"])
+        segment = row.get("track_segment_id", 0)
+        region = row.get("entry_region", row.get("region", "unclassified"))
+        tracked = (row.get("tracking_status") == "tracked"
+                   and not bool(row.get("low_confidence", False))
+                   and not bool(row.get("carried_forward", False))
+                   and bool(row.get("analysis_included", True)))
+        observed = tracked and pd.notna(segment) and (region in REGION_ORDER or bool(row.get("boundary_hold", False)))
+        if not observed:
+            interrupted = True
+            pending = None
+            pending_count = 0
+            last_observed_frame = last_observed_segment = None
+            boundary_frames = 0
+            continue
+        adjacent = last_observed_frame == frame - 1 and last_observed_segment == segment
+        if not adjacent:
+            interrupted = True
+            pending = None
+            pending_count = 0
+            boundary_frames = 0
+        last_observed_frame, last_observed_segment = frame, segment
+        if bool(row.get("boundary_hold", False)):
+            # A measured border point can bridge region labels only while the
+            # same track is present on every frame.
+            boundary_frames += 1
+            pending = None
+            pending_count = 0
+            continue
+        if first_valid is None:
+            first_valid = pos
+        if region == stable:
+            pending = None
+            pending_count = 0
+            interrupted = False
+            last_stable_frame = frame
+            boundary_frames = 0
+            continue
+        if pending != region:
+            pending = region
+            pending_start = pos
+            pending_count = 1
+            pending_uncertain = interrupted or stable is None
+            pending_boundary_frames = boundary_frames
+        else:
+            pending_count += 1
+        if pending_count < dwell:
+            continue
+        if stable is None:
+            if not baselined and count_initial_arm and region != "center" and first_valid - interval_start <= dwell:
+                emit("open_arm_entry" if region.startswith("open_") else "closed_arm_entry",
+                     None, region, pending_start, pos, "confirmed_proxy", "initial_arm_occupancy",
+                     None, pending_boundary_frames)
+        else:
+            if stable == "center" and region.startswith("open_"):
+                name = "open_arm_entry"
+            elif stable == "center" and region.startswith("closed_"):
+                name = "closed_arm_entry"
+            elif stable != "center" and region == "center":
+                name = "center_entry"
+            else:
+                name = "possible_transition"
+                skipped += 1
+            uncertain = pending_uncertain or name == "possible_transition"
+            emit("possible_transition" if uncertain else name, stable, region,
+                 pending_start, pos, "requires_manual_review" if uncertain else "confirmed_proxy",
+                 "unobserved_interval_or_track_change" if pending_uncertain else
+                 "direct_arm_change_without_observed_center" if name == "possible_transition" else
+                 "continuous_observed_proxy_crossing", last_stable_frame, pending_boundary_frames)
+        stable = region
+        baselined = True
+        pending = None
+        pending_count = 0
+        interrupted = False
+        last_stable_frame = frame
+        boundary_frames = 0
+    columns = ["event", "from_region", "to_region", "frame_index", "time_seconds",
+               "confirmed_frame_index", "confirmed_time_seconds", "supporting_frames",
+               "source_last_frame_index", "observed_boundary_frames", "track_segment_id",
+               "point_source", "evidence", "review_state"]
+    return data, pd.DataFrame(events, columns=columns), skipped
+
+def _whole_seconds(counts, fps):
+    exact = [v / fps for v in counts]
+    values = [math.floor(x) for x in exact]
+    target = math.floor(sum(exact) + 0.5)
+    ranking = sorted(range(len(values)), key=lambda i: (-(exact[i] - values[i]), i))
+    for idx in ranking[:target - sum(values)]:
+        values[idx] += 1
+    return values
+
+
+def create_epm_bundle(tracking_df, calibration, fps, mode='head_shoulders',
+                      min_dwell_seconds=0.3, count_initial_arm=True,
+                      analysis_start_seconds=0., analysis_end_seconds=None,
+                      boundary_margin_px=2.):
+    if tracking_df.empty or fps <= 0:
+        raise ValueError('Need nonempty tracking and positive FPS')
+    first = round(analysis_start_seconds * fps)
+    end = len(tracking_df) if analysis_end_seconds is None else round(analysis_end_seconds * fps)
+    if not 0 <= first < end <= len(tracking_df):
+        raise ValueError('Analysis interval must be nonempty and inside video')
+    data = assign_epm_frames(tracking_df, calibration, mode, boundary_margin_px)
+    data['analysis_included'] = data['frame_index'].between(first, end - 1)
+    data.loc[~data['analysis_included'], ['region', 'arm_type', 'entry_region']] = 'excluded'
+    per_frame, events, skipped = detect_epm_events(data, fps, min_dwell_seconds, count_initial_arm)
+    selected = per_frame[per_frame['analysis_included']]
+    counts = {name: int((selected['region'] == name).sum()) for name in REGION_ORDER}
+    unknown = len(selected) - sum(counts.values())
+    secs = _whole_seconds([counts['open_1'] + counts['open_2'],
+                           counts['closed_1'] + counts['closed_2'], counts['center'], unknown], fps)
+    confirmed = events.loc[events['review_state'] == 'confirmed_proxy', 'event'].value_counts() if len(events) else pd.Series(dtype=int)
     summary = pd.DataFrame([{
-        "Open Arm Entries": int(event_counts.get("open_arm_entry", 0)),
-        "Closed Arm Entries": int(event_counts.get("closed_arm_entry", 0)),
-        "Center Entry": int(event_counts.get("center_entry", 0)),
-        "Open Arm Time (whole seconds)": open_seconds,
-        "Closed Arm Time (whole seconds)": closed_seconds,
-        "Center Time (whole seconds)": center_seconds,
+        'Open Arm Entries': int(confirmed.get('open_arm_entry', 0)),
+        'Closed Arm Entries': int(confirmed.get('closed_arm_entry', 0)),
+        'Center Entry': int(confirmed.get('center_entry', 0)),
+        'Open Arm Time (whole seconds)': secs[0],
+        'Closed Arm Time (whole seconds)': secs[1],
+        'Center Time (whole seconds)': secs[2],
     }], columns=SUMMARY_COLUMNS)
-    region_times = pd.DataFrame([
-        {"region": name, "frames": counts[name], "seconds": round(counts[name] / fps, 3)}
-        for name in REGION_ORDER
-    ] + [{"region": "unclassified", "frames": unknown_frames, "seconds": round(unknown_frames / fps, 3)}])
-    coverage = 100 * (len(selected) - unknown_frames) / len(selected)
-    status = selected["tracking_status"]
-    head_sources = selected.get(
-        "head_estimate_source", pd.Series("provided_head_proxy", index=selected.index)
-    )
-    low_confidence = int(selected["low_confidence"].fillna(False).sum())
-    rejected = int((status == "rejected").sum())
-    rejected_jumps = int((selected.get("rejection_reason", pd.Series(index=selected.index, dtype=str)) == "raw_jump").sum())
-    qc = pd.DataFrame([
-        {"metric": "analysis_start_frame", "value": start_frame},
-        {"metric": "analysis_end_frame_exclusive", "value": end_frame},
-        {"metric": "analysis_duration_seconds", "value": round(len(selected) / fps, 3)},
-        {"metric": "scored_coverage_percent", "value": round(coverage, 2)},
-        {"metric": "unclassified_frames", "value": unknown_frames},
-        {"metric": "unclassified_seconds", "value": round(unknown_frames / fps, 3)},
-        {"metric": "unclassified_whole_seconds", "value": unknown_seconds},
-        {"metric": "low_confidence_frames", "value": low_confidence},
-        {"metric": "low_confidence_seconds", "value": round(low_confidence / fps, 3)},
-        {"metric": "lost_frames", "value": int((status == "lost").sum())},
-        {"metric": "lost_seconds", "value": round(int((status == "lost").sum()) / fps, 3)},
-        {"metric": "reacquiring_frames", "value": int((status == "reacquiring").sum())},
-        {"metric": "rejected_candidate_frames", "value": rejected},
-        {"metric": "rejected_candidate_seconds", "value": round(rejected / fps, 3)},
-        {"metric": "rejected_raw_jumps", "value": rejected_jumps},
-        {"metric": "boundary_unclassified_frames", "value": int(selected["on_boundary"].sum())},
-        {"metric": "missing_head_proxy_frames", "value": int((
-            (status == "tracked")
-            & ~head_sources.isin({"motion_heading", "provided_head_proxy"})
-        ).sum())},
-        {"metric": "skipped_direct_arm_changes", "value": skipped},
-        {"metric": "event_dwell_frames", "value": max(1, math.ceil(min_dwell_seconds * fps))},
-        {"metric": "review_state", "value": "needs_manual_review"},
-    ] + [
-        {"metric": f"rejection_reason_{reason}", "value": int(count)}
-        for reason, count in selected.get("rejection_reason", pd.Series(index=selected.index, dtype=str)).dropna().value_counts().items()
-        if reason
-    ])
-    warnings = ["Needs manual review: automated EPM counts and times are not validated research measurements."]
-    if unknown_frames:
-        warnings.append(f"{unknown_frames} selected frames were unclassified; no arm or center time was invented for them.")
-    if coverage < 90:
-        warnings.append(f"Only {coverage:.1f}% of the selected interval has accepted maze assignments. Review tracking and calibration.")
+    region_times = pd.DataFrame([{'region': k, 'frames': v, 'seconds': round(v / fps, 3)} for k, v in counts.items()] +
+                                [{'region': 'unclassified', 'frames': unknown, 'seconds': round(unknown / fps, 3)}])
+    statuses = selected['tracking_status']
+    rejected = int((statuses == 'rejected').sum())
+    review_count = int((events['review_state'] == 'requires_manual_review').sum())
+    qc_dict = {
+        'analysis_start_frame': first, 'analysis_end_frame_exclusive': end,
+        'analysis_duration_seconds': round(len(selected) / fps, 3),
+        'scored_coverage_percent': round(100 * (len(selected) - unknown) / len(selected), 2),
+        'unclassified_frames': unknown, 'unclassified_seconds': round(unknown / fps, 3),
+        'unclassified_whole_seconds': secs[3],
+        'low_confidence_frames': int(selected['low_confidence'].fillna(False).sum()),
+        'lost_frames': int((statuses == 'lost').sum()),
+        'reacquiring_frames': int((statuses == 'reacquiring').sum()),
+        'rejected_candidate_frames': rejected,
+        'rejected_raw_jumps': int((selected['rejection_reason'] == 'raw_jump').sum()) if 'rejection_reason' in selected else 0,
+        'boundary_unclassified_frames': int(selected['on_boundary'].sum()),
+        'missing_head_proxy_frames': int(((statuses == 'tracked') &
+            ~selected['head_estimate_source'].isin({'motion_heading', 'provided_head_proxy'})).sum()) if 'head_estimate_source' in selected else 0,
+        'skipped_direct_arm_changes': skipped,
+        'possible_transitions_for_review': review_count,
+        'event_dwell_frames': max(1, math.ceil(min_dwell_seconds * fps)),
+        'occupancy_source': 'tracked_body_centroid',
+        'entry_proxy': mode,
+        'review_state': 'needs_manual_review',
+    }
+    qc = pd.DataFrame([{'metric': k, 'value': v} for k, v in qc_dict.items()] +
+                      [{'metric': f'rejection_reason_{k}', 'value': int(v)} for k, v in
+                       selected.get('rejection_reason', pd.Series(dtype=str)).dropna().value_counts().items() if k])
+    warnings = ['Needs manual review: operational entry proxies are NOT verified four-paw scoring.']
+    warnings += [f'{unknown} frames remain unclassified; uncertain time is not invented.',
+                 'Arm time uses tracked body centroid; entry events use selected operational proxy.']
+    if review_count:
+        warnings.append(f'{review_count} possible transitions require manual adjudication and were NOT counted.')
     if rejected:
-        warnings.append(f"{rejected} frames contained rejected detection candidates. Check raw versus accepted points in the QC video.")
-    if skipped:
-        warnings.append(f"{skipped} direct arm-to-arm changes lacked an observed center crossing and were not counted as entries.")
-    edge_frames = max(1, round(10 * fps))
-    for label, window in (("start", selected.head(edge_frames)), ("end", selected.tail(edge_frames))):
-        if len(window) and (window["region"].isin(REGION_ORDER).mean() < 0.8):
-            warnings.append(f"Low accepted coverage near the {label} of the selected interval. Check setup/experimenter activity and record any justified trim.")
+        warnings.append(f'{rejected} frames contained rejected candidates; inspect the QC video.')
+    if qc_dict['scored_coverage_percent'] < 90:
+        warnings.append('Body-position coverage below 90%; inspect tracking and calibration.')
     return EPMBundle(per_frame, summary, region_times, events, qc, warnings)

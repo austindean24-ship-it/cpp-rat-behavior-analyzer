@@ -89,7 +89,8 @@ def test_canvas_mapping_and_original_coordinates() -> None:
 def test_head_proxy_drives_region_classification() -> None:
     rows = tracking_rows(["center"])
     rows.loc[0, ["smoothed_head_shoulder_x", "smoothed_head_shoulder_y"]] = [100, 50]
-    assert assign_epm_frames(rows, calibration()).loc[0, "region"] == "open_1"
+    assert assign_epm_frames(rows, calibration(), mode="head_shoulders").loc[0, "entry_region"] == "open_1"
+    assert assign_epm_frames(rows, calibration(), mode="head_shoulders").loc[0, "region"] == "center"
     assert assign_epm_frames(rows, calibration(), mode="centroid").loc[0, "region"] == "center"
 
 
@@ -104,9 +105,10 @@ def test_entries_require_stable_crossings_and_do_not_bridge_missing_frames() -> 
     assert list(result.summary.columns) == list(SUMMARY_COLUMNS)
     assert (row["Open Arm Entries"], row["Closed Arm Entries"], row["Center Entry"]) == (2, 1, 2)
     assert sum(int(row[column]) for column in SUMMARY_COLUMNS[3:]) <= round(len(labels) / 10)
-    assert result.events["event"].tolist() == [
+    assert result.events.loc[result.events.review_state == "confirmed_proxy", "event"].tolist() == [
         "closed_arm_entry", "center_entry", "open_arm_entry", "center_entry", "open_arm_entry"
     ]
+    assert result.events.loc[result.events.review_state == "requires_manual_review", "event"].tolist() == ["possible_transition"]
     assert result.region_times.set_index("region").loc["unclassified", "frames"] == 1
 
 

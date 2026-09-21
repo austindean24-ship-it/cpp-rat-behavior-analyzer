@@ -353,7 +353,8 @@ The original CPP workflow and its output files are unchanged.
 1. Upload one fixed-camera EPM video. Check its FPS and duration. The analysis
    interval defaults to the entire recording; set start/end only when a
    reviewed setup/removal interval justifies trimming. The bounds are exported.
-2. Choose a clear calibration frame (the first frame may show the experimenter),
+2. Load a prior `calibration_and_settings.json` from this exact recording, or
+   choose a clear calibration frame (the first frame may show the experimenter),
    then left-click the corners of each of five walking-surface polygons and
    **right-click to close** each polygon. Draw center, two open
    arms, and two closed arms. Exclude room equipment and shadows. Click the
@@ -361,15 +362,19 @@ The original CPP workflow and its output files are unchanged.
 3. Map the numbered polygons to **center**, **open arm 1**, **open arm 2**,
    **closed arm 1**, and **closed arm 2**. Confirm the labeled overlay. The app
    rejects substantial region overlaps and arms that do not meet the center.
-4. Use the **head-and-shoulders proxy** scoring point to match the current lab
-   choice. The default dwell is 0.3 seconds; set it to the lab protocol. Review whether
+4. The pilot defaults to a **smoothed body centroid** for provisional entry
+   crossings. Raw centroid and a motion-derived front-of-body proxy remain
+   labeled options for review; none detects head keypoints or paws. The default
+   dwell is 0.3 seconds; set it to the lab protocol. Review whether
    the initial arm should count as an entry.
 5. Run analysis. Review QC warnings, the event table, and the annotated MP4
    before using results.
 
 The EPM-only tracker restricts foreground extraction to the five walking
-surfaces before morphology. It rejects implausible raw jumps, incompatible
-contour sizes, and off-maze paths before changing its accepted state. Following
+surfaces before morphology. It rejects full-width illumination footprints in
+either polarity using their geometry and signed contrast, but does not exclude
+an entire area for a fixed time. Multiple unanchored candidates stay ambiguous.
+It rejects implausible raw jumps, incompatible contour sizes, and off-maze paths before changing its accepted state. Following
 a gap it requires multiple coherent candidates to reacquire. Rejected and
 reacquiring frames remain unclassified; no location is carried forward for
 scoring. The CPP tracker and scoring path are unchanged.
@@ -378,12 +383,16 @@ An open or closed arm entry is a confirmed transition from center into that
 arm. A return from an arm into center is a center entry. Consecutive frames in
 one arm count once. A brief center or arm label shorter than the chosen dwell
 setting is not a new event. Missing, outside, rejected, and low-confidence
-frames break event continuity and contribute to unknown time, never entries.
+frames break entry continuity and contribute to unknown body time only when
+body position is itself untrusted. A missing optional head orientation does
+not erase accepted body occupancy.
 A narrow boundary band is also unclassified for time, while continuous
 observation across it can still support a confirmed transition. The initial
 arm can optionally count once. The motion-based head-and-shoulders point is
-a proxy, not anatomical pose estimation; if it is unavailable, the default
-mode records unknown time instead of silently using the body centroid.
+a proxy, not anatomical pose estimation. Unobserved crossings and direct
+arm-to-arm label changes are exported as possible transitions for manual
+review and excluded from the six-column counts. Frames where raw and smoothed
+body centroids disagree on region are unclassified.
 
 ### EPM outputs
 
@@ -398,14 +407,15 @@ rejected jumps, and a needs-manual-review status.
 Other exports are `events.csv`, `region_times.csv`,
 `per_frame_assignments.csv`, `tracking_raw.csv`, `qc_metrics.csv`,
 `warnings.txt`, `calibration_and_settings.json`, and optional
-`annotated_output.mp4`. The annotated video shows the regions, scoring point,
+`annotated_output.mp4`. The annotated video shows the regions, green body
+occupancy point and cyan entry proxy separately,
 continuous accepted trajectory, rejected raw candidate markers, tracking
-status/reason, and confirmed events. Lines stop at unknown gaps and are not
+status/reason, provisional events, and reviewer-only possible transitions.
+Lines stop at unknown gaps and are not
 drawn across off-maze floor.
 
 Automated EPM values remain in needs-manual-review status until the lab checks
-raw video against accepted points and individual events. The diagnostic
-calibration reconstructed from an annotated MP4 is not an exact substitute
-for the original saved polygon/settings JSON. Synthetic tests check rejection
-and continuity but do not establish a numerical accuracy tolerance on the
-user's videos.
+raw video against accepted points and individual events. Centroid entries use
+a different operational point from the prior head-and-shoulders choice; do not
+combine their counts as if they measure the same definition. Synthetic tests
+and one original-video regression do not establish research accuracy.

@@ -64,10 +64,10 @@ def test_untrusted_frames_have_unknown_time_and_no_proxy_fallback() -> None:
     rows["head_estimate_source"] = "motion_heading"
     rows.loc[4, "head_estimate_source"] = "centroid_fallback"
     bundle = create_epm_bundle(rows, calibration(), 10, min_dwell_seconds=0.1)
-    assert bundle.region_times.set_index("region").loc["unclassified", "frames"] == 3
-    assert bundle.per_frame.loc[4, "assignment_point_source"] == "centroid_fallback"
+    assert bundle.region_times.set_index("region").loc["unclassified", "frames"] == 2
+    assert bundle.per_frame.loc[4, "entry_point_source"] == "missing_head_orientation"
     assert bundle.summary.loc[0, "Open Arm Entries"] == 0
-    assert bundle.qc_metrics.set_index("metric").loc["unclassified_frames", "value"] == 3
+    assert bundle.qc_metrics.set_index("metric").loc["unclassified_frames", "value"] == 2
     assert bundle.qc_metrics.set_index("metric").loc["missing_head_proxy_frames", "value"] == 1
 
 
@@ -87,8 +87,8 @@ def test_boundary_peeks_do_not_make_entries_but_confirmed_crossings_do() -> None
     rows.loc[6:7, "smoothed_head_shoulder_x"] = 130
     rows.loc[8:9, "smoothed_head_shoulder_x"] = 110
     bundle = create_epm_bundle(rows, calibration(), 10, min_dwell_seconds=0.2)
-    assert bundle.events["event"].tolist() == ["closed_arm_entry", "center_entry"]
-    assert int((bundle.per_frame["on_boundary"]).sum()) == 4
+    assert bundle.events.loc[bundle.events.review_state == "confirmed_proxy", "event"].tolist() == ["closed_arm_entry", "center_entry"]
+    assert int((bundle.per_frame["entry_boundary"]).sum()) == 4
 
 
 def test_interval_excludes_setup_frames_and_preserves_total_with_unknown() -> None:
@@ -109,7 +109,8 @@ def test_segment_change_never_invents_a_return_from_an_unseen_arm() -> None:
     rows = tracking_rows(["center"] * 2 + ["open_1"] * 2 + ["missing"] + ["center"] * 3)
     rows["track_segment_id"] = [1, 1, 1, 1, np.nan, 2, 2, 2]
     bundle = create_epm_bundle(rows, calibration(), 10, min_dwell_seconds=0.2)
-    assert bundle.events["event"].tolist() == ["open_arm_entry"]
+    assert bundle.events.loc[bundle.events.review_state == "confirmed_proxy", "event"].tolist() == ["open_arm_entry"]
+    assert bundle.events.loc[bundle.events.review_state == "requires_manual_review", "event"].tolist() == ["possible_transition"]
     assert bundle.region_times.set_index("region").loc["unclassified", "frames"] == 1
 
 
