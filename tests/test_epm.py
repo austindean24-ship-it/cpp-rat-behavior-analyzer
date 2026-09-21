@@ -103,13 +103,15 @@ def test_entries_require_stable_crossings_and_do_not_bridge_missing_frames() -> 
     result = create_epm_bundle(tracking_rows(labels), calibration(), fps=10, min_dwell_seconds=0.2)
     row = result.summary.iloc[0]
     assert list(result.summary.columns) == list(SUMMARY_COLUMNS)
-    assert (row["Open Arm Entries"], row["Closed Arm Entries"], row["Center Entry"]) == (2, 1, 2)
+    assert (row["Open Arm Entries"], row["Closed Arm Entries"], row["Center Entry"]) == (3, 1, 3)
     assert sum(int(row[column]) for column in SUMMARY_COLUMNS[3:]) <= round(len(labels) / 10)
     assert result.events.loc[result.events.review_state == "confirmed_proxy", "event"].tolist() == [
-        "closed_arm_entry", "center_entry", "open_arm_entry", "center_entry", "open_arm_entry"
+        "closed_arm_entry", "center_entry", "open_arm_entry", "center_entry",
+        "open_arm_entry", "center_entry", "open_arm_entry",
     ]
     assert result.events.loc[result.events.review_state == "requires_manual_review", "event"].tolist() == ["possible_transition"]
-    assert result.region_times.set_index("region").loc["unclassified", "frames"] == 1
+    assert result.region_times.set_index("region").loc["unclassified", "frames"] == 0
+    assert result.per_frame.loc[13, "assignment_uncertain"]
 
 
 def test_initial_arm_is_configurable_and_not_recounted_after_a_gap() -> None:

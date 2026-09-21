@@ -365,8 +365,8 @@ The original CPP workflow and its output files are unchanged.
 4. The pilot defaults to a **smoothed body centroid** for provisional entry
    crossings. Raw centroid and a motion-derived front-of-body proxy remain
    labeled options for review; none detects head keypoints or paws. The default
-   dwell is 0.3 seconds; set it to the lab protocol. Review whether
-   the initial arm should count as an entry.
+   arm dwell is fixed at 1.0 second and center dwell at 0.1 second. Review
+   whether the initial arm should count as an entry.
 5. Run analysis. Review QC warnings, the event table, and the annotated MP4
    before using results.
 
@@ -376,18 +376,20 @@ either polarity using their geometry and signed contrast, but does not exclude
 an entire area for a fixed time. Multiple unanchored candidates stay ambiguous.
 It rejects implausible raw jumps, incompatible contour sizes, and off-maze paths before changing its accepted state. Following
 a gap it requires multiple coherent candidates to reacquire. Rejected and
-reacquiring frames remain unclassified; no location is carried forward for
-scoring. The CPP tracker and scoring path are unchanged.
+reacquiring frames receive a trajectory-based region assignment when a nearby
+valid track supports one. Short gaps interpolate only along an in-maze path
+under the jump ceiling; other gaps hold the nearest observed position and are
+flagged. A video with no temporal anchor, or a long unobserved start/end,
+remains unclassified. The CPP tracker and scoring path are unchanged.
 
 An open or closed arm entry is a confirmed transition from center into that
 arm. A return from an arm into center is a center entry. Consecutive frames in
-one arm count once. A brief center or arm label shorter than the chosen dwell
-setting is not a new event. Missing, outside, rejected, and low-confidence
-frames break entry continuity and contribute to unknown body time only when
-body position is itself untrusted. A missing optional head orientation does
-not erase accepted body occupancy.
-A narrow boundary band is also unclassified for time, while continuous
-observation across it can still support a confirmed transition. The initial
+one arm count once. An arm visit shorter than 1 second is center time and
+creates neither an arm entry nor a return entry. A center stay of at least
+0.1 second can count as a center entry. Inferred frames carry method and
+uncertainty flags; physically plausible short interpolations may support
+provisional events, while unsupported crossings remain possible transitions.
+A missing optional head orientation does not erase body occupancy. The initial
 arm can optionally count once. The motion-based head-and-shoulders point is
 a proxy, not anatomical pose estimation. Unobserved crossings and direct
 arm-to-arm label changes are exported as possible transitions for manual

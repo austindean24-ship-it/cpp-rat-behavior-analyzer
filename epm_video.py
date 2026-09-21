@@ -72,6 +72,10 @@ def write_annotated_epm_video(
             if row is not None:
                 label = str(row.region)
                 status = str(row.tracking_status)
+                raw_status = status
+                inferred = bool(getattr(row, 'assignment_uncertain', False)) and label not in {'excluded', 'outside', 'unclassified'}
+                if inferred:
+                    status = f'inferred ({getattr(row, "assignment_method", "unknown")})'
                 event = "" if pd.isna(row.event) else str(row.event)
                 review_value = getattr(row, "review_event", "")
                 review_event = "" if pd.isna(review_value) else str(review_value)
@@ -81,21 +85,22 @@ def write_annotated_epm_video(
                     point = (int(row.assignment_x), int(row.assignment_y))
                     segment_id = int(row.track_segment_id) if hasattr(row, "track_segment_id") and pd.notna(row.track_segment_id) else 0
                     trail.append((processed, point, segment_id))
-                    cv2.circle(frame, point, 7, (0, 255, 0), -1, cv2.LINE_AA)
-                    cv2.circle(frame, point, 13, (0, 255, 0), 2, cv2.LINE_AA)
+                    color = (0, 210, 255) if inferred else (0, 255, 0)
+                    cv2.circle(frame, point, 7, color, -1, cv2.LINE_AA)
+                    cv2.circle(frame, point, 13, color, 2, cv2.LINE_AA)
                 else:
                     trail.append(None)
-                if status != "tracked" and hasattr(row, "raw_candidate_x") and pd.notna(row.raw_candidate_x):
+                if raw_status != "tracked" and hasattr(row, "raw_candidate_x") and pd.notna(row.raw_candidate_x):
                     raw = (int(row.raw_candidate_x), int(row.raw_candidate_y))
                     cv2.drawMarker(frame, raw, (0, 140, 255), cv2.MARKER_TILTED_CROSS, 20, 2, cv2.LINE_AA)
-                elif status == "tracked" and pd.isna(row.assignment_x) and pd.notna(row.centroid_x):
+                elif raw_status == "tracked" and pd.isna(row.assignment_x) and pd.notna(row.centroid_x):
                     cv2.circle(frame, (int(row.centroid_x), int(row.centroid_y)), 8, (0, 210, 255), 2, cv2.LINE_AA)
                 if (getattr(row, "entry_region", "unclassified") in {"center", "open_1", "open_2", "closed_1", "closed_2"}
                         and pd.notna(getattr(row, "entry_assignment_x", np.nan))
                         and pd.notna(getattr(row, "entry_assignment_y", np.nan))):
                     proxy = (int(row.entry_assignment_x), int(row.entry_assignment_y))
                     cv2.drawMarker(frame, proxy, (255, 220, 0), cv2.MARKER_CROSS, 15, 2, cv2.LINE_AA)
-                elif (status == "tracked" and getattr(row, "entry_point_mode", "") == "head_shoulders"
+                elif (raw_status == "tracked" and getattr(row, "entry_point_mode", "") == "head_shoulders"
                       and getattr(row, "entry_point_source", "") == "missing_head_orientation"
                       and pd.notna(row.centroid_x)):
                     cv2.circle(frame, (int(row.centroid_x), int(row.centroid_y)), 18, (0, 210, 255), 2, cv2.LINE_AA)
@@ -112,7 +117,7 @@ def write_annotated_epm_video(
                 cv2.putText(frame, f"PROVISIONAL ENTRY: {event.replace('_', ' ').upper()}", (18, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (0, 255, 255), 2, cv2.LINE_AA)
             elif row is not None and review_event:
                 cv2.putText(frame, "POSSIBLE TRANSITION - REVIEW RAW VIDEO", (18, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (0, 165, 255), 2, cv2.LINE_AA)
-            cv2.putText(frame, "Green: body occupancy  Cyan +: entry proxy  Orange X: rejected candidate", (18, 112), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(frame, "Green: observed  Yellow: inferred  Cyan +: entry proxy  Orange X: rejected", (18, 112), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1, cv2.LINE_AA)
             cv2.putText(frame, "White: continuous body path  Yellow ring: head orientation unavailable  |  Review all entries", (18, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 210, 255), 1, cv2.LINE_AA)
             writer.write(frame)
             processed += 1
