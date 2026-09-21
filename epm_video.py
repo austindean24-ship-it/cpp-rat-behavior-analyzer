@@ -7,12 +7,25 @@ from pathlib import Path
 from typing import Callable
 
 import cv2
+import numpy as np
 import pandas as pd
 
 from epm import EPMCalibration
 from io_utils import ensure_directory, get_video_metadata
 
 ProgressCallback = Callable[[int, int], None]
+
+
+def _valid_trail_edge(start: tuple[int, tuple[int, int], int], end: tuple[int, tuple[int, int], int], mask: np.ndarray) -> bool:
+    if end[0] != start[0] + 1 or end[2] != start[2]:
+        return False
+    a, b = start[1], end[1]
+    distance = float(np.linalg.norm(np.subtract(a, b)))
+    for t in np.linspace(0, 1, max(2, int(distance / 2))):
+        x, y = round(a[0] + t * (b[0] - a[0])), round(a[1] + t * (b[1] - a[1]))
+        if not (0 <= x < mask.shape[1] and 0 <= y < mask.shape[0] and mask[y, x]):
+            return False
+    return True
 
 
 def write_annotated_epm_video(
@@ -39,7 +52,8 @@ def write_annotated_epm_video(
         cap.release()
         raise ValueError("Could not create the annotated MP4.")
     rows = {int(row.frame_index): row for row in per_frame.itertuples(index=False)}
-    trail: deque[tuple[int, int]] = deque(maxlen=120)
+    trail: deque[tuple[int, tuple[int, int], int] | None] = deque(maxlen=120)
+    walkway = calibration.tracking_mask()
     processed = 0
     try:
         while True:
@@ -54,24 +68,38 @@ def write_annotated_epm_video(
             label = "missing"
             status = "no tracking row"
             event = ""
+            reason = ""
             if row is not None:
                 label = str(row.region)
                 status = str(row.tracking_status)
                 event = str(row.event)
-                if pd.notna(row.assignment_x) and pd.notna(row.assignment_y):
+                reason = str(getattr(row, "rejection_reason", ""))
+                if pd.notna(row.assignment_x) and pd.notna(row.assignment_y) and label not in {"excluded", "outside", "unclassified"}:
                     point = (int(row.assignment_x), int(row.assignment_y))
-                    trail.append(point)
-                    color = (0, 210, 255) if bool(row.low_confidence) else (0, 255, 0)
-                    cv2.circle(frame, point, 7, color, -1, cv2.LINE_AA)
-                    cv2.circle(frame, point, 13, color, 2, cv2.LINE_AA)
+                    segment_id = int(row.track_segment_id) if hasattr(row, "track_segment_id") and pd.notna(row.track_segment_id) else 0
+                    trail.append((processed, point, segment_id))
+                    cv2.circle(frame, point, 7, (0, 255, 0), -1, cv2.LINE_AA)
+                    cv2.circle(frame, point, 13, (0, 255, 0), 2, cv2.LINE_AA)
+                else:
+                    trail.append(None)
+                if status != "tracked" and hasattr(row, "raw_candidate_x") and pd.notna(row.raw_candidate_x):
+                    raw = (int(row.raw_candidate_x), int(row.raw_candidate_y))
+                    cv2.drawMarker(frame, raw, (0, 140, 255), cv2.MARKER_TILTED_CROSS, 20, 2, cv2.LINE_AA)
+                elif status == "tracked" and pd.isna(row.assignment_x) and pd.notna(row.centroid_x):
+                    cv2.circle(frame, (int(row.centroid_x), int(row.centroid_y)), 8, (0, 210, 255), 2, cv2.LINE_AA)
+            else:
+                trail.append(None)
             if draw_trajectory and len(trail) > 1:
                 for start, end in zip(list(trail)[:-1], list(trail)[1:]):
-                    cv2.line(frame, start, end, (255, 255, 255), 2, cv2.LINE_AA)
-            cv2.rectangle(frame, (8, 6), (min(metadata.width - 8, 820), 91 if event else 68), (20, 20, 20), -1)
+                    if start is not None and end is not None and _valid_trail_edge(start, end, walkway):
+                        cv2.line(frame, start[1], end[1], (255, 255, 255), 2, cv2.LINE_AA)
+            cv2.rectangle(frame, (8, 6), (min(metadata.width - 8, 1120), 143), (20, 20, 20), -1)
             cv2.putText(frame, f"Frame {processed}  |  {(float(row.time_seconds) if row is not None else processed / metadata.fps):.2f} s  |  {label}", (18, 31), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
-            cv2.putText(frame, f"Tracking: {status}", (18, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 210, 255) if row is not None and row.low_confidence else (200, 255, 200), 2, cv2.LINE_AA)
+            cv2.putText(frame, f"Tracking: {status}  {reason[:55]}", (18, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 210, 255) if row is not None and row.low_confidence else (200, 255, 200), 2, cv2.LINE_AA)
             if event:
                 cv2.putText(frame, event.replace("_", " ").upper(), (18, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame, "Green: scored  Orange X: rejected candidate  White: continuous accepted path", (18, 112), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(frame, "Yellow ring: tracked body without a usable scoring proxy  |  Events require video review", (18, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 210, 255), 1, cv2.LINE_AA)
             writer.write(frame)
             processed += 1
             if progress_callback and (processed % 60 == 0 or processed == len(per_frame)):
