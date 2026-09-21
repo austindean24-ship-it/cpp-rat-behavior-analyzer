@@ -72,8 +72,11 @@ def write_annotated_epm_video(
             if row is not None:
                 label = str(row.region)
                 status = str(row.tracking_status)
-                event = str(row.event)
-                reason = str(getattr(row, "rejection_reason", ""))
+                event = "" if pd.isna(row.event) else str(row.event)
+                review_value = getattr(row, "review_event", "")
+                review_event = "" if pd.isna(review_value) else str(review_value)
+                reason_value = getattr(row, "rejection_reason", "")
+                reason = "" if pd.isna(reason_value) else str(reason_value)
                 if pd.notna(row.assignment_x) and pd.notna(row.assignment_y) and label not in {"excluded", "outside", "unclassified"}:
                     point = (int(row.assignment_x), int(row.assignment_y))
                     segment_id = int(row.track_segment_id) if hasattr(row, "track_segment_id") and pd.notna(row.track_segment_id) else 0
@@ -87,6 +90,15 @@ def write_annotated_epm_video(
                     cv2.drawMarker(frame, raw, (0, 140, 255), cv2.MARKER_TILTED_CROSS, 20, 2, cv2.LINE_AA)
                 elif status == "tracked" and pd.isna(row.assignment_x) and pd.notna(row.centroid_x):
                     cv2.circle(frame, (int(row.centroid_x), int(row.centroid_y)), 8, (0, 210, 255), 2, cv2.LINE_AA)
+                if (getattr(row, "entry_region", "unclassified") in {"center", "open_1", "open_2", "closed_1", "closed_2"}
+                        and pd.notna(getattr(row, "entry_assignment_x", np.nan))
+                        and pd.notna(getattr(row, "entry_assignment_y", np.nan))):
+                    proxy = (int(row.entry_assignment_x), int(row.entry_assignment_y))
+                    cv2.drawMarker(frame, proxy, (255, 220, 0), cv2.MARKER_CROSS, 15, 2, cv2.LINE_AA)
+                elif (status == "tracked" and getattr(row, "entry_point_mode", "") == "head_shoulders"
+                      and getattr(row, "entry_point_source", "") == "missing_head_orientation"
+                      and pd.notna(row.centroid_x)):
+                    cv2.circle(frame, (int(row.centroid_x), int(row.centroid_y)), 18, (0, 210, 255), 2, cv2.LINE_AA)
             else:
                 trail.append(None)
             if draw_trajectory and len(trail) > 1:
@@ -97,9 +109,11 @@ def write_annotated_epm_video(
             cv2.putText(frame, f"Frame {processed}  |  {(float(row.time_seconds) if row is not None else processed / metadata.fps):.2f} s  |  {label}", (18, 31), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
             cv2.putText(frame, f"Tracking: {status}  {reason[:55]}", (18, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 210, 255) if row is not None and row.low_confidence else (200, 255, 200), 2, cv2.LINE_AA)
             if event:
-                cv2.putText(frame, event.replace("_", " ").upper(), (18, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 255), 2, cv2.LINE_AA)
-            cv2.putText(frame, "Green: scored  Orange X: rejected candidate  White: continuous accepted path", (18, 112), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1, cv2.LINE_AA)
-            cv2.putText(frame, "Yellow ring: tracked body without a usable scoring proxy  |  Events require video review", (18, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 210, 255), 1, cv2.LINE_AA)
+                cv2.putText(frame, f"PROVISIONAL ENTRY: {event.replace('_', ' ').upper()}", (18, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (0, 255, 255), 2, cv2.LINE_AA)
+            elif row is not None and review_event:
+                cv2.putText(frame, "POSSIBLE TRANSITION - REVIEW RAW VIDEO", (18, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (0, 165, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame, "Green: body occupancy  Cyan +: entry proxy  Orange X: rejected candidate", (18, 112), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(frame, "White: continuous body path  Yellow ring: head orientation unavailable  |  Review all entries", (18, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 210, 255), 1, cv2.LINE_AA)
             writer.write(frame)
             processed += 1
             if progress_callback and (processed % 60 == 0 or processed == len(per_frame)):

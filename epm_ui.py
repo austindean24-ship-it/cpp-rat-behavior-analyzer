@@ -17,6 +17,7 @@ from canvas_utils import st_canvas_fixed
 from epm import (
     REGION_ORDER,
     calibration_from_canvas,
+    calibration_from_saved_settings,
     create_epm_bundle,
     draw_epm_overlay,
     extract_epm_polygons,
@@ -43,9 +44,9 @@ EPM_TRACKING_CONFIG = TrackingConfig(
     roi_padding_px=0,
 )
 POINT_OPTIONS = {
-    "Head-and-shoulders proxy": "head_shoulders",
-    "Smoothed body centroid": "smoothed_centroid",
+    "Smoothed body centroid (pilot default)": "smoothed_centroid",
     "Raw body centroid": "centroid",
+    "Motion-derived head proxy (experimental)": "head_shoulders",
 }
 
 
@@ -100,11 +101,13 @@ def _render_results(results: dict) -> None:
     st.subheader("EPM results")
     qc_values = results["qc"].set_index("metric")["value"]
     st.error(
-        f'Needs manual review · accepted coverage {float(qc_values["scored_coverage_percent"]):.1f}% · '
-        f'{float(qc_values["unclassified_seconds"]):.1f} s unclassified. '
+        f'Needs manual review · body occupancy coverage {float(qc_values["scored_coverage_percent"]):.1f}% · '
+        f'{float(qc_values["unclassified_seconds"]):.1f} s unclassified · '
+        f'{int(qc_values.get("possible_transitions_for_review", 0))} possible transitions. '
         "Review the raw video and event table before using any measurement."
     )
     summary = results["summary"]
+    st.caption("Entries are provisional centroid or motion-proxy crossings; they are not anatomical paw or head measurements. Review every event and possible transition against the raw video.")
     st.dataframe(summary, hide_index=True, use_container_width=True)
     time_cols = st.columns(3)
     time_cols[0].metric("Open arm", f'{int(summary.iloc[0]["Open Arm Time (whole seconds)"])} s')
@@ -216,7 +219,7 @@ def _render_epm_sidebar() -> None:
   </ol>
   <div class="epm-sidebar-section">Analysis</div>
   <ol class="epm-sidebar-list" start="6">
-    <li><strong>Use the head-and-shoulders proxy.</strong> Set dwell time and initial-arm counting to your lab rule.</li>
+    <li><strong>Choose an entry proxy.</strong> Smoothed body centroid is the pilot default. Set dwell time and initial-arm counting to your lab rule.</li>
     <li><strong>Run analysis.</strong> Keep the page open while tracking and optional video export finish.</li>
     <li><strong>Review results.</strong> Check unknown time, rejected candidates, the event table, and raw versus accepted markers in the annotated video.</li>
     <li><strong>Download outputs.</strong> Save the six-column summary and review files.</li>
@@ -229,6 +232,12 @@ def _render_epm_sidebar() -> None:
     with st.sidebar.expander("Changelog", expanded=False):
         st.markdown(
             """
+**September 21, 2026 — controlled pilot candidate**
+
+- Defaulted provisional entries to smoothed body centroid while scoring body occupancy separately from optional entry proxies.
+- Added same-video calibration reload, possible-transition review rows, and separate body/proxy markers in QC video.
+- Rechecked illumination artifacts and reacquisition on the original recording; manual verification remains required.
+
 **September 20, 2026**
 
 **EPM reliability review (local)**
@@ -252,12 +261,12 @@ def main() -> None:
     _render_epm_sidebar()
     st.title("Elevated Plus Maze Analyzer")
     st.caption("Upload one fixed-camera session, choose a clear calibration frame, draw five maze regions, and score the rat.")
-    st.caption("Pilot scoring: uncertain positions are unclassified; manually verify events and timing before research use.")
+    st.caption("Pilot scoring: body occupancy and provisional entry proxies are separate. Manually verify events and timing before research use.")
     st.info(
-        "Entries use the selected scoring point crossing from center into an arm. "
+        "Body time uses a tracked centroid; entries use the selected provisional proxy crossing from center into an arm. "
         "A return from an arm into center counts as a center entry. "
         "A stable arm occupied at the start can count as one initial entry. "
-        "Low-confidence, rejected, or missing frames create neither entries nor maze time."
+        "Uncertain body locations add unknown time. Unobserved transitions enter a review queue, not the entry counts."
     )
 
     with st.container(border=True):
@@ -329,6 +338,10 @@ def main() -> None:
     image, scale_x, scale_y = _display_frame(calibration_frame)
     with st.container(border=True):
         st.subheader("2 · Define the maze")
+        saved_calibration = st.file_uploader(
+            "Or load calibration_and_settings.json from this same video",
+            type=["json"], key=f'epm_saved_calibration_{hashlib.sha256(st.session_state["epm_video_signature"].encode()).hexdigest()[:16]}',
+        )
         st.write(
             "Draw **five polygons** on the selected frame: center, two open arms, and two closed arms. "
             "Click around each walking surface and right-click to close that polygon. "
@@ -386,11 +399,26 @@ def main() -> None:
                 st.error("There are more than five polygons. Clear the drawing and try again.")
         except (ValueError, TypeError, KeyError) as error:
             st.warning(f"Calibration needs attention: {error}")
+    if saved_calibration is not None:
+        try:
+            calibration = calibration_from_saved_settings(
+                json.loads(saved_calibration.getvalue()), metadata.width, metadata.height,
+                st.session_state["epm_video_signature"],
+            )
+            st.image(
+                cv2.cvtColor(draw_epm_overlay(calibration_frame, calibration), cv2.COLOR_BGR2RGB),
+                caption="Saved polygons loaded. Check all five regions against this frame.",
+                use_container_width=True,
+            )
+            st.success("Saved calibration loaded for this recording.")
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
+            calibration = None
+            st.error(f"Saved calibration could not be used: {error}")
 
     with st.container(border=True):
         st.subheader("4 · Choose scoring and run")
-        point_label = st.selectbox("Position used for region and entry scoring", list(POINT_OPTIONS), key="epm_point")
-        st.caption("The head-and-shoulders option is a motion-based proxy, not anatomical pose tracking.")
+        point_label = st.selectbox("Provisional entry proxy", list(POINT_OPTIONS), key="epm_point")
+        st.caption("Smoothed body centroid is the pilot default. The optional head point uses motion direction, not anatomical pose or four-paw tracking.")
         dwell = float(st.number_input(
             "Minimum continuous time in a new region before an entry counts (seconds)",
             min_value=0.0, max_value=2.0, value=0.3, step=0.05, key="epm_dwell",
@@ -404,7 +432,7 @@ def main() -> None:
         export_video = st.checkbox("Create annotated QC video", value=True, key="epm_export_video")
         draw_trajectory = st.checkbox("Show trajectory in QC video", value=True, key="epm_trajectory")
         if calibration is None:
-            st.warning("Complete and verify all five polygons before running analysis.")
+            st.warning("Load a matching saved calibration or complete and verify all five polygons before running analysis.")
         run = st.button("Run EPM analysis", type="primary", disabled=calibration is None or not valid_interval)
 
     if calibration is None:
@@ -418,6 +446,8 @@ def main() -> None:
         "analysis_start_frame": start_frame,
         "analysis_end_frame_exclusive": end_frame,
         "scoring_point": POINT_OPTIONS[point_label],
+        "occupancy_point": "tracked_smoothed_body_centroid",
+        "scoring_version": "epm_pilot_centroid_v3",
         "min_dwell_seconds": dwell,
         "count_initial_arm": initial_entry,
         "export_annotated_video": export_video,
@@ -454,7 +484,8 @@ def main() -> None:
             calibration_json.write_text(json.dumps(settings, indent=2), encoding="utf-8")
             paths["calibration_json"] = calibration_json
             flagged_frames = bundle.per_frame.loc[
-                (bundle.per_frame["tracking_status"] != "tracked") | bundle.per_frame["event"].ne("")
+                (bundle.per_frame["tracking_status"] != "tracked")
+                | bundle.per_frame["event"].ne("") | bundle.per_frame["review_event"].ne("")
             ]
             preview = pd.concat([
                 bundle.per_frame.iloc[::max(1, len(bundle.per_frame) // 100)],
