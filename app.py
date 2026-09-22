@@ -1911,7 +1911,7 @@ def render_rat_progress(
 
 
 def main() -> None:
-    st.set_page_config(page_title="CPP Analyzer | Rat Behavior Analysis Suite", layout="wide")
+    st.set_page_config(page_title="Rat Behavior Analysis Suite", layout="wide")
     ensure_session_state()
     inject_visual_theme()
     render_sidebar_help()
