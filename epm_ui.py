@@ -272,7 +272,7 @@ def _render_epm_sidebar() -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="EPM Analyzer | Rat Behavior Analysis Suite", layout="wide")
+    st.set_page_config(page_title="Rat Behavior Analysis Suite", layout="wide")
     inject_epm_visual_theme()
     _render_epm_sidebar()
     render_epm_hero()
