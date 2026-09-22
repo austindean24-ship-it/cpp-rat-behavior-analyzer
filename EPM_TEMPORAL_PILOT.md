@@ -1,5 +1,9 @@
 # EPM temporal scoring pilot — 21 September 2026
 
+Historical pilot record: the current EPM page uses **0.5-second arm dwell** as
+of 22 September 2026. The one-second measurements below describe the earlier
+pilot and are retained for comparison.
+
 This revision changes only the EPM page and scorer. The CPP tracker and scorer
 are untouched. The Streamlit EPM default remains smoothed body centroid.
 

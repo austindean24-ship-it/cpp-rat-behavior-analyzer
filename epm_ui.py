@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,8 @@ from PIL import Image
 
 from canvas_utils import st_canvas_fixed
 from epm import (
+    ARM_DWELL_SECONDS,
+    CENTER_DWELL_SECONDS,
     REGION_ORDER,
     calibration_from_canvas,
     calibration_from_saved_settings,
@@ -25,6 +28,13 @@ from epm import (
 )
 from epm_video import write_annotated_epm_video
 from epm_tracker import EPMTracker
+from epm_visuals import (
+    inject_epm_visual_theme,
+    render_epm_creator,
+    render_epm_empty_state,
+    render_epm_hero,
+    render_epm_progress,
+)
 from io_utils import (
     ensure_directory,
     export_dataframe_csv,
@@ -43,11 +53,8 @@ EPM_TRACKING_CONFIG = TrackingConfig(
     smoothing_alpha=0.35,
     roi_padding_px=0,
 )
-POINT_OPTIONS = {
-    "Smoothed body centroid (pilot default)": "smoothed_centroid",
-    "Raw body centroid": "centroid",
-    "Motion-derived head proxy (experimental)": "head_shoulders",
-}
+EPM_SCORING_POINT = "smoothed_centroid"
+CREATOR_PHOTO_PATH = APP_DIR / "assets" / "austin_dean_headshot.png"
 
 
 def _display_frame(frame, max_width: int = 1100) -> tuple[Image.Image, float, float]:
@@ -108,7 +115,7 @@ def _render_results(results: dict) -> None:
         "Review the raw video and event table before using any measurement."
     )
     summary = results["summary"]
-    st.caption("Entries are provisional centroid or motion-proxy crossings. One-second arm dwell and 0.1-second center dwell are fixed. Review inferred frames and events against the raw video.")
+    st.caption("Entries use the smoothed body centroid. Arm dwell is 0.5 seconds; center dwell is 0.1 seconds. Review inferred frames and events against the raw video.")
     st.dataframe(summary, hide_index=True, use_container_width=True)
     time_cols = st.columns(3)
     time_cols[0].metric("Open arm", f'{int(summary.iloc[0]["Open Arm Time (whole seconds)"])} s')
@@ -155,23 +162,18 @@ def _render_epm_sidebar() -> None:
 <style>
 .epm-sidebar-panel {
     box-sizing: border-box;
-    padding: 1.15rem 1rem;
-    border: 1px solid rgba(166, 190, 205, 0.88);
-    border-radius: 22px;
+    padding: 1rem;
+    border: 1px solid #d5e1ea;
+    border-radius: 7px;
     background: #ffffff;
-    box-shadow: 0 8px 24px rgba(15, 36, 54, 0.07);
     color: #172a3a;
 }
 .epm-sidebar-kicker {
     display: inline-block;
-    padding: 0.34rem 0.7rem;
-    border-radius: 999px;
-    background: rgba(15, 118, 110, 0.11);
+    padding: 0;
     color: #0f766e;
-    font-size: 0.76rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
 }
 .epm-sidebar-title {
     margin: 0.7rem 0 0.75rem;
@@ -213,14 +215,14 @@ def _render_epm_sidebar() -> None:
   <div class="epm-sidebar-section">Setup</div>
   <ol class="epm-sidebar-list">
     <li><strong>Upload video.</strong> Check the duration and FPS.</li>
-    <li><strong>Set the scoring interval.</strong> Leave the full video by default, or record justified start/end times after checking setup and removal.</li>
+    <li><strong>Check the session.</strong> The entire uploaded video is scored at its embedded FPS.</li>
     <li><strong>Choose a clear frame.</strong> Select a calibration time without the experimenter over the maze.</li>
     <li><strong>Draw five regions.</strong> Outline center, two open arms, and two closed arms. Right-click to close each polygon, then Send to Streamlit.</li>
     <li><strong>Check labels.</strong> Map the numbered polygons and review their boundaries.</li>
   </ol>
   <div class="epm-sidebar-section">Analysis</div>
   <ol class="epm-sidebar-list" start="6">
-    <li><strong>Choose an entry proxy.</strong> Smoothed body centroid is the pilot default. Arm entry requires 1 second; center entry requires 0.1 second.</li>
+    <li><strong>Check the fixed scoring rule.</strong> Smoothed body centroid is used. Arm entry requires 0.5 seconds; center entry requires 0.1 second.</li>
     <li><strong>Run analysis.</strong> Keep the page open while tracking and optional video export finish.</li>
     <li><strong>Review results.</strong> Check inferred frames, rejected candidates, the event table, and observed versus inferred markers in the annotated video.</li>
     <li><strong>Download outputs.</strong> Save the six-column summary and review files.</li>
@@ -233,6 +235,12 @@ def _render_epm_sidebar() -> None:
     with st.sidebar.expander("Changelog", expanded=False):
         st.markdown(
             """
+**September 22, 2026 — EPM page and scoring update**
+
+- Set the fixed arm entry dwell to 0.5 seconds; center dwell remains 0.1 seconds.
+- Simplified the page to use video FPS, the full recording, and smoothed body centroid automatically.
+- Added EPM visuals, a rat progress panel, and the creator section.
+
 **September 21, 2026 — temporal scoring revision**
 
 - Fixed arm dwell at 1 second and center dwell at 0.1 second; brief arm peeks count as center time.
@@ -264,16 +272,15 @@ def _render_epm_sidebar() -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="EPM Rat Behavior Analyzer", layout="wide")
+    st.set_page_config(page_title="EPM Analyzer | Rat Behavior Analysis Suite", layout="wide")
+    inject_epm_visual_theme()
     _render_epm_sidebar()
-    st.title("Elevated Plus Maze Analyzer")
-    st.caption("Upload one fixed-camera session, choose a clear calibration frame, draw five maze regions, and score the rat.")
-    st.caption("Pilot scoring: body occupancy and provisional entry proxies are separate. Manually verify events and timing before research use.")
+    render_epm_hero()
     st.info(
-        "Body time uses a tracked centroid; entries use the selected provisional proxy crossing from center into an arm. "
+        "Body time and entries use the smoothed body centroid. "
         "A return from an arm into center counts as a center entry. "
         "A stable arm occupied at the start can count as one initial entry. "
-        "Arm entries require 1 second; center entries require 0.1 second. Brief arm peeks count as center time. "
+        "Arm entries require 0.5 seconds; center entries require 0.1 second. Brief arm peeks count as center time. "
         "Missing body positions are inferred from neighboring frames and flagged for review."
     )
 
@@ -293,6 +300,8 @@ def main() -> None:
             _clear_results()
             st.rerun()
     if not st.session_state.get("epm_video_path"):
+        render_epm_empty_state()
+        render_epm_creator(CREATOR_PHOTO_PATH)
         return
 
     video_path = Path(st.session_state["epm_video_path"])
@@ -300,6 +309,7 @@ def main() -> None:
         metadata = get_video_metadata(video_path)
     except (ValueError, FileNotFoundError) as error:
         st.error(str(error))
+        render_epm_creator(CREATOR_PHOTO_PATH)
         return
     st.write(
         f"**{video_path.name}** · {metadata.width} × {metadata.height} · "
@@ -308,27 +318,10 @@ def main() -> None:
     if metadata.notes:
         for note in metadata.notes:
             st.warning(note)
-    manual_fps = st.checkbox("Use a manual FPS for time conversion", value=False, key="epm_manual_fps")
     fps = float(metadata.fps)
-    if manual_fps:
-        fps = float(st.number_input("Actual FPS", min_value=0.1, max_value=240.0, value=float(metadata.fps), step=0.1, key="epm_fps"))
-
-    duration = metadata.frame_count / fps
-    st.caption("The scoring interval defaults to the whole video. Trim setup/end frames only after checking the raw video; the chosen bounds are exported.")
-    start_seconds = float(st.number_input(
-        "Analysis start (seconds, inclusive)", min_value=0.0, max_value=float(duration),
-        value=0.0, step=1.0, key="epm_start_seconds",
-    ))
-    end_seconds = float(st.number_input(
-        "Analysis end (seconds, exclusive)", min_value=0.0, max_value=float(duration),
-        value=float(duration), step=1.0, key="epm_end_seconds",
-    ))
-    start_frame, end_frame = round(start_seconds * fps), round(end_seconds * fps)
-    valid_interval = 0 <= start_frame < end_frame <= metadata.frame_count
-    if not valid_interval:
-        st.error("Choose an end after the start, within the video.")
-    else:
-        st.caption(f"Selected interval: frames {start_frame:,}–{end_frame - 1:,} ({(end_frame - start_frame) / fps:.2f} s).")
+    start_seconds, end_seconds = 0.0, metadata.frame_count / fps
+    start_frame, end_frame = 0, metadata.frame_count
+    st.caption("The full recording is scored using its embedded frame rate. Select a separate calibration frame below without changing the scored interval.")
 
     max_frame = max(0, metadata.frame_count - 1)
     max_seconds = max_frame / metadata.fps
@@ -342,6 +335,7 @@ def main() -> None:
         calibration_frame = _read_calibration_frame(video_path, calibration_frame_index)
     except ValueError as error:
         st.error(str(error))
+        render_epm_creator(CREATOR_PHOTO_PATH)
         return
     image, scale_x, scale_y = _display_frame(calibration_frame)
     with st.container(border=True):
@@ -424,11 +418,9 @@ def main() -> None:
             st.error(f"Saved calibration could not be used: {error}")
 
     with st.container(border=True):
-        st.subheader("4 · Choose scoring and run")
-        point_label = st.selectbox("Provisional entry proxy", list(POINT_OPTIONS), key="epm_point")
-        st.caption("Smoothed body centroid is the pilot default. The optional head point uses motion direction, not anatomical pose or four-paw tracking.")
-        dwell = 1.0
-        st.caption("Fixed entry rules: 1.0 second in an arm, 0.1 second in center. Short arm peeks count as center time.")
+        st.subheader("4 · Run analysis")
+        dwell = ARM_DWELL_SECONDS
+        st.caption("Fixed scoring: smoothed body centroid; 0.5 seconds in an arm and 0.1 seconds in center. Short arm peeks count as center time.")
         initial_entry = st.checkbox(
             "Count the initial arm if the rat starts in an arm",
             value=True, key="epm_initial_entry",
@@ -438,9 +430,10 @@ def main() -> None:
         draw_trajectory = st.checkbox("Show trajectory in QC video", value=True, key="epm_trajectory")
         if calibration is None:
             st.warning("Load a matching saved calibration or complete and verify all five polygons before running analysis.")
-        run = st.button("Run EPM analysis", type="primary", disabled=calibration is None or not valid_interval)
+        run = st.button("Run EPM analysis", type="primary", disabled=calibration is None)
 
     if calibration is None:
+        render_epm_creator(CREATOR_PHOTO_PATH)
         return
     settings = {
         "video_signature": st.session_state["epm_video_signature"],
@@ -450,9 +443,9 @@ def main() -> None:
         "analysis_end_seconds": end_seconds,
         "analysis_start_frame": start_frame,
         "analysis_end_frame_exclusive": end_frame,
-        "scoring_point": POINT_OPTIONS[point_label],
+        "scoring_point": EPM_SCORING_POINT,
         "occupancy_point": "tracked_smoothed_body_centroid",
-        "scoring_version": "epm_temporal_centroid_v4",
+        "scoring_version": "epm_fixed_centroid_half_second_v5",
         "min_dwell_seconds": dwell,
         "count_initial_arm": initial_entry,
         "export_annotated_video": export_video,
@@ -461,20 +454,41 @@ def main() -> None:
     }
     signature = hashlib.sha256(json.dumps(settings, sort_keys=True).encode("utf-8")).hexdigest()
     if run:
-        progress = st.progress(0, text="Preparing EPM tracking")
+        progress_panel = st.empty()
+        started_at = time.time()
+        status_notes: list[str] = []
+
+        def update_status(fraction: float, stage: str, detail: str, technical: str, note: str | None = None) -> None:
+            if note and (not status_notes or status_notes[-1] != note):
+                status_notes.append(note)
+            render_epm_progress(progress_panel, fraction, stage, detail, technical,
+                                time.time() - started_at, status_notes)
+
+        update_status(.02, "Preparing the EPM analysis", "Checking the video and five maze regions.",
+                      f"{video_path.name} · {fps:.3f} FPS · full recording", "Analysis started.")
         try:
             tracker = EPMTracker(EPM_TRACKING_CONFIG)
 
             def track_progress(current: int, total: int) -> None:
                 if current % 120 == 0 or current == total:
-                    progress.progress(min(70, 5 + int(65 * current / max(total, 1))), text=f"Tracking frame {current:,} of {total:,}")
+                    fraction = .08 + .62 * current / max(total, 1)
+                    elapsed = max(time.time() - started_at, 1e-6)
+                    speed = current / elapsed
+                    remaining = (total - current) / speed if speed > 0 else 0
+                    update_status(fraction, "Tracking the rat through the maze",
+                                  f"Scanning frame {current:,} of {total:,} within the five mapped regions.",
+                                  f"{speed:.1f} frames/sec · approximately {remaining:.0f} s remaining",
+                                  "Frame-by-frame tracking is running.")
 
             tracking = tracker.track_video(video_path, calibration=calibration, progress_callback=track_progress, fps_override=fps)
-            progress.progress(75, text="Scoring regions and entries")
+            update_status(.74, "Scoring occupancy and entries", "Applying fixed arm and center dwell rules.",
+                          "Smoothed centroid · 0.5 s arm · 0.1 s center", "Tracking finished; scoring regions.")
             bundle = create_epm_bundle(
-                tracking, calibration, fps, POINT_OPTIONS[point_label], dwell, initial_entry,
+                tracking, calibration, fps, EPM_SCORING_POINT, dwell, initial_entry,
                 analysis_start_seconds=start_seconds, analysis_end_seconds=end_seconds,
             )
+            update_status(.80, "Saving measurements and QC", "Writing frame assignments, events, and summary files.",
+                          f"{len(bundle.per_frame):,} frames scored", "Exporting review files.")
             output_dir = ensure_directory(RESULTS_DIR / f'{video_path.stem}_{datetime.now().strftime("%Y%m%d_%H%M%S")}_{uuid.uuid4().hex[:6]}')
             paths = {
                 "tracking_csv": export_dataframe_csv(tracking, output_dir / "tracking_raw.csv"),
@@ -512,18 +526,24 @@ def main() -> None:
             st.session_state["epm_results"] = payload
             if export_video:
                 def video_progress(current: int, total: int) -> None:
-                    progress.progress(min(99, 80 + int(19 * current / max(total, 1))), text=f"Writing annotated frame {current:,} of {total:,}")
+                    if current % 120 == 0 or current == total:
+                        update_status(.84 + .15 * current / max(total, 1), "Creating the annotated video",
+                                      f"Writing annotated frame {current:,} of {total:,}.",
+                                      "Observed points: green · inferred points: yellow",
+                                      "Annotated MP4 export is running.")
 
                 payload["annotated_video"] = str(write_annotated_epm_video(
                     video_path, output_dir / "annotated_output.mp4", bundle.per_frame,
                     calibration, draw_trajectory, video_progress
                 ))
-            progress.progress(100, text="EPM analysis complete")
+            update_status(1., "Analysis complete", "Results and downloads are ready below.",
+                          f"Saved to {output_dir}", "Analysis complete.")
             st.success("EPM analysis complete.")
         except Exception as error:
             _clear_results()
-            progress.empty()
+            update_status(1., "Analysis stopped", "The run could not finish.", str(error), "Review the error and retry.")
             st.exception(error)
+            render_epm_creator(CREATOR_PHOTO_PATH)
             return
 
     results = st.session_state.get("epm_results")
@@ -531,3 +551,4 @@ def main() -> None:
         _render_results(results)
     elif results:
         st.info("The video, calibration, or scoring settings changed. Run EPM analysis again to update the results.")
+    render_epm_creator(CREATOR_PHOTO_PATH)
