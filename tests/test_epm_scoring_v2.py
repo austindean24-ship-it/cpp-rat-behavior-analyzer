@@ -84,20 +84,20 @@ def test_smoothing_disagreement_uses_neighboring_observations_with_qc_flag():
 
 
 def test_short_arm_peek_is_center_time_without_arm_or_return_entry():
-    d=rows(['center']*5+['open_1']*2+['center']*5)
+    d=rows(['center']*5+['open_1']*4+['center']*5)
     b=create_epm_bundle(d,maze(),10,mode='smoothed_centroid',count_initial_arm=False)
     assert b.summary.iloc[0]['Open Arm Entries']==0
     assert b.summary.iloc[0]['Center Entry']==0
-    assert b.region_times.set_index('region').loc['center','frames']==12
-    assert b.per_frame.loc[5:6,'peek_reassigned_to_center'].all()
+    assert b.region_times.set_index('region').loc['center','frames']==14
+    assert b.per_frame.loc[5:8,'peek_reassigned_to_center'].all()
 
 
-def test_one_second_arm_and_point_one_second_center_entry():
-    d=rows(['center']*5+['open_1']*10+['center']*2)
+def test_half_second_arm_and_point_one_second_center_entry():
+    d=rows(['center']*5+['open_1']*5+['center']*2)
     b=create_epm_bundle(d,maze(),10,mode='smoothed_centroid',count_initial_arm=False)
     assert b.summary.iloc[0]['Open Arm Entries']==1
     assert b.summary.iloc[0]['Center Entry']==1
-    assert b.region_times.set_index('region').loc['open_1','frames']==10
+    assert b.region_times.set_index('region').loc['open_1','frames']==5
 
 
 def test_missing_frames_get_position_but_impossible_diagonal_is_not_interpolated():

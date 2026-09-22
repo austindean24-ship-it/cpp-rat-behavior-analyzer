@@ -13,6 +13,8 @@ import pandas as pd
 from regions import extract_polygons_from_canvas
 
 REGION_ORDER = ("center", "open_1", "open_2", "closed_1", "closed_2")
+ARM_DWELL_SECONDS = 0.5
+CENTER_DWELL_SECONDS = 0.1
 COLORS = {
     "center": (50, 190, 165),
     "open_1": (65, 170, 245),
@@ -387,7 +389,7 @@ def reassign_short_arm_peeks(data, fps: float, min_arm_seconds: float):
     return data
 
 
-def detect_epm_events(assigned, fps, min_dwell_seconds=0.3, count_initial_arm=True):
+def detect_epm_events(assigned, fps, min_dwell_seconds=ARM_DWELL_SECONDS, count_initial_arm=True):
     """Only uninterrupted observed proxy transitions contribute to counts.
 
     A gap preserves the last region as reviewer context, never as evidence of a
@@ -396,7 +398,7 @@ def detect_epm_events(assigned, fps, min_dwell_seconds=0.3, count_initial_arm=Tr
     if fps <= 0 or min_dwell_seconds < 0:
         raise ValueError("FPS must be positive and dwell must be nonnegative")
     arm_dwell = max(1, math.ceil(fps * min_dwell_seconds))
-    center_dwell = max(1, math.ceil(fps * .1))
+    center_dwell = max(1, math.ceil(fps * CENTER_DWELL_SECONDS))
     data = assigned.copy()
     data["event"] = ""
     data["review_event"] = ""
@@ -537,7 +539,7 @@ def _whole_seconds(counts, fps):
 
 
 def create_epm_bundle(tracking_df, calibration, fps, mode='head_shoulders',
-                      min_dwell_seconds=1.0, count_initial_arm=True,
+                      min_dwell_seconds=ARM_DWELL_SECONDS, count_initial_arm=True,
                       analysis_start_seconds=0., analysis_end_seconds=None,
                       boundary_margin_px=2.):
     if tracking_df.empty or fps <= 0:
@@ -592,7 +594,7 @@ def create_epm_bundle(tracking_df, calibration, fps, mode='head_shoulders',
         'skipped_direct_arm_changes': skipped,
         'possible_transitions_for_review': review_count,
         'arm_event_dwell_frames': max(1, math.ceil(min_dwell_seconds * fps)),
-        'center_event_dwell_frames': max(1, math.ceil(.1 * fps)),
+        'center_event_dwell_frames': max(1, math.ceil(CENTER_DWELL_SECONDS * fps)),
         'occupancy_source': 'tracked_or_temporally_inferred_body_centroid',
         'entry_proxy': mode,
         'review_state': 'needs_manual_review',

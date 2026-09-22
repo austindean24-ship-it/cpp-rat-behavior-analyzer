@@ -146,16 +146,6 @@ def inject_visual_theme() -> None:
 </svg>
 """
     )
-    lab_grid = svg_data_uri(
-        """
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">
-  <g fill="none" stroke="#D4E1EA" stroke-width="1" opacity="0.46">
-    <path d="M0 40h240M0 80h240M0 120h240M0 160h240M0 200h240"/>
-    <path d="M40 0v240M80 0v240M120 0v240M160 0v240M200 0v240"/>
-  </g>
-</svg>
-"""
-    )
     section_divider = svg_data_uri(
         """
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 28">
@@ -210,21 +200,18 @@ def inject_visual_theme() -> None:
         f"""
 <style>
 :root {{
-    --lab-border: #ded0c1;
-    --lab-shadow: 0 18px 40px rgba(57, 47, 39, 0.08);
-    --lab-shadow-soft: 0 8px 24px rgba(57, 47, 39, 0.06);
-    --lab-text: #24353b;
-    --lab-muted: #66777c;
-    --lab-muted-soft: #86969b;
-    --lab-accent: #b46c58;
-    --lab-accent-deep: #8f5445;
+    --lab-border: #d5e1ea;
+    --lab-shadow: none;
+    --lab-shadow-soft: none;
+    --lab-text: #172a3a;
+    --lab-muted: #536879;
+    --lab-muted-soft: #718699;
+    --lab-accent: #0f766e;
+    --lab-accent-deep: #0b4f6c;
 }}
 
 .stApp {{
-    background:
-        radial-gradient(circle at top left, #fffdf8 0%, rgba(255, 253, 248, 0.95) 18%, rgba(244, 239, 232, 0.92) 38%, rgba(240, 233, 224, 0.92) 100%),
-        url("{lab_grid}");
-    background-size: auto, 240px 240px;
+    background: #f7fafb;
     color: var(--lab-text);
 }}
 
@@ -249,19 +236,15 @@ p, label, li {{
 
 div[data-testid="stVerticalBlockBorderWrapper"] {{
     border: 1px solid var(--lab-border);
-    border-radius: 24px;
-    background: linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(255,251,247,0.72) 100%);
-    box-shadow: var(--lab-shadow);
+    border-radius: 7px;
+    background: #ffffff;
+    box-shadow: none;
     padding: 0.45rem 0.5rem;
-    backdrop-filter: blur(10px);
 }}
 
 section[data-testid="stSidebar"] {{
-    background:
-        linear-gradient(180deg, rgba(251,247,241,0.98) 0%, rgba(246,240,232,0.98) 100%),
-        url("{lab_grid}");
-    background-size: auto, 220px 220px;
-    border-right: 1px solid rgba(205, 185, 166, 0.7);
+    background: #f3f8fa;
+    border-right: 1px solid var(--lab-border);
 }}
 
 section[data-testid="stSidebar"] .block-container {{
@@ -272,10 +255,10 @@ section[data-testid="stSidebar"] .block-container {{
     position: relative;
     overflow: hidden;
     padding: 1.2rem 1rem 1rem 1rem;
-    border-radius: 22px;
-    background: linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(252,248,243,0.88) 100%);
-    border: 1px solid rgba(207, 189, 172, 0.8);
-    box-shadow: var(--lab-shadow-soft);
+    border-radius: 7px;
+    background: #ffffff;
+    border: 1px solid var(--lab-border);
+    box-shadow: none;
 }}
 
 .lab-sidebar-panel::after {{
@@ -371,110 +354,6 @@ section[data-testid="stSidebar"] .block-container {{
     color: var(--lab-text);
 }}
 
-.lab-hero {{
-    position: relative;
-    overflow: hidden;
-    display: grid;
-    grid-template-columns: minmax(0, 1.6fr) minmax(250px, 0.8fr);
-    gap: 1.4rem;
-    padding: 1.5rem 1.5rem 1.35rem 1.5rem;
-    border-radius: 28px;
-    border: 1px solid rgba(207, 189, 172, 0.86);
-    background:
-        linear-gradient(140deg, rgba(255, 253, 248, 0.94) 0%, rgba(250, 244, 237, 0.92) 52%, rgba(244, 235, 227, 0.94) 100%),
-        url("{lab_grid}");
-    background-size: auto, 220px 220px;
-    box-shadow: 0 24px 56px rgba(57, 47, 39, 0.11);
-    margin-bottom: 1.15rem;
-}}
-
-.lab-hero::after {{
-    content: "";
-    position: absolute;
-    right: -36px;
-    bottom: -22px;
-    width: 240px;
-    height: 140px;
-    background: url("{hero_silhouette}") no-repeat center / contain;
-    opacity: 0.18;
-    pointer-events: none;
-}}
-
-.lab-hero__eyebrow {{
-    display: inline-flex;
-    border-radius: 999px;
-    background: rgba(180,108,88,0.1);
-    color: var(--lab-accent-deep);
-    font-size: 0.78rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    padding: 0.45rem 0.78rem;
-    margin-bottom: 0.9rem;
-}}
-
-.lab-hero__title {{
-    font-size: clamp(2rem, 3vw, 2.85rem);
-    line-height: 1.02;
-    margin: 0 0 0.85rem 0;
-    max-width: 17ch;
-}}
-
-.lab-hero__copy {{
-    font-size: 1rem;
-    line-height: 1.7;
-    color: var(--lab-muted);
-    max-width: 70ch;
-    margin: 0;
-}}
-
-.lab-badges {{
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.6rem;
-    margin-top: 1rem;
-}}
-
-.lab-badge {{
-    display: inline-flex;
-    border-radius: 999px;
-    padding: 0.42rem 0.78rem;
-    background: rgba(255,255,255,0.75);
-    border: 1px solid rgba(207, 189, 172, 0.86);
-    color: var(--lab-text);
-    font-size: 0.85rem;
-    font-weight: 600;
-    box-shadow: 0 6px 18px rgba(57, 47, 39, 0.05);
-}}
-
-.lab-hero__meta {{
-    display: grid;
-    gap: 0.8rem;
-    align-content: start;
-}}
-
-.lab-hero__stat {{
-    border-radius: 18px;
-    padding: 0.95rem 1rem;
-    background: rgba(255,255,255,0.74);
-    border: 1px solid rgba(207, 189, 172, 0.86);
-    box-shadow: 0 10px 22px rgba(57, 47, 39, 0.05);
-}}
-
-.lab-hero__stat-label {{
-    font-size: 0.77rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--lab-muted-soft);
-    margin-bottom: 0.32rem;
-}}
-
-.lab-hero__stat-value {{
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--lab-text);
-}}
-
 .lab-section-header {{
     position: relative;
     padding: 0.15rem 0 0.9rem 0;
@@ -523,11 +402,10 @@ section[data-testid="stSidebar"] .block-container {{
     grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.8fr);
     gap: 1.4rem;
     align-items: center;
-    padding: 1.45rem 1.35rem;
-    border-radius: 26px;
-    border: 1px solid rgba(207, 189, 172, 0.86);
-    background: linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(251,247,241,0.9) 100%);
-    box-shadow: var(--lab-shadow);
+    padding: 1rem 0;
+    border-radius: 0;
+    border-top: 1px solid var(--lab-border);
+    background: #ffffff;
     margin-top: 0.8rem;
 }}
 
@@ -566,11 +444,10 @@ section[data-testid="stSidebar"] .block-container {{
 }}
 
 .lab-results-card {{
-    padding: 0.95rem 1rem;
-    border-radius: 18px;
-    background: rgba(255,255,255,0.72);
-    border: 1px solid rgba(207, 189, 172, 0.86);
-    box-shadow: var(--lab-shadow-soft);
+    padding: 0.55rem 0.7rem;
+    border-radius: 0;
+    background: transparent;
+    border-left: 1px solid var(--lab-border);
 }}
 
 .lab-results-card__label {{
@@ -595,13 +472,12 @@ section[data-testid="stSidebar"] .block-container {{
     position: relative;
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 0.65rem;
-    padding: 0.9rem;
+    gap: 0;
+    padding: 0;
     margin: 0 0 1.15rem 0;
     border: 1px solid var(--lab-border);
-    border-radius: 24px;
-    background: linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(241,248,251,0.92) 100%);
-    box-shadow: var(--lab-shadow-soft);
+    border-radius: 7px;
+    background: #ffffff;
 }}
 
 .lab-workflow-guide::before {{
@@ -660,11 +536,11 @@ section[data-testid="stSidebar"] .block-container {{
 
 .lab-workflow-step--active {{
     border-color: rgba(15, 118, 110, 0.68);
-    box-shadow: 0 10px 22px rgba(15, 118, 110, 0.10);
+    box-shadow: inset 0 3px 0 #0f766e;
 }}
 
 .lab-workflow-step--active .lab-workflow-step__index {{
-    background: linear-gradient(135deg, #0f766e 0%, #0b4f6c 100%);
+    background: #0f766e;
     color: #ffffff;
 }}
 
@@ -714,7 +590,7 @@ section[data-testid="stSidebar"] .block-container {{
     position: relative;
     overflow: hidden;
     border: 1px solid var(--lab-border);
-    border-radius: 17px;
+    border-radius: 7px;
     padding: 0.85rem 0.85rem 0.78rem 0.85rem;
     background: rgba(255,255,255,0.84);
     box-shadow: var(--lab-shadow-soft);
@@ -758,7 +634,7 @@ section[data-testid="stSidebar"] .block-container {{
 
 .lab-export-chip {{
     border: 1px solid var(--lab-border);
-    border-radius: 15px;
+    border-radius: 7px;
     padding: 0.7rem 0.78rem;
     background: rgba(255,255,255,0.78);
 }}
@@ -780,11 +656,11 @@ section[data-testid="stSidebar"] .block-container {{
 }}
 
 div[data-testid="stMetric"] {{
-    border: 1px solid rgba(207, 189, 172, 0.82);
-    border-radius: 18px;
-    padding: 0.85rem 1rem;
-    background: rgba(255,255,255,0.68);
-    box-shadow: var(--lab-shadow-soft);
+    border: 0;
+    border-left: 2px solid var(--lab-border);
+    border-radius: 0;
+    padding: 0.4rem 0.8rem;
+    background: transparent;
 }}
 
 div[data-testid="stMetricLabel"] p {{
@@ -797,40 +673,35 @@ div[data-testid="stMetricValue"] {{
 }}
 
 div[data-testid="stFileUploaderDropzone"] {{
-    background: linear-gradient(180deg, rgba(255, 250, 244, 0.96) 0%, rgba(248, 242, 235, 0.96) 100%);
-    border: 1.5px dashed rgba(180,108,88,0.55);
-    border-radius: 20px;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    background: #f7fafb;
+    border: 1.5px dashed #82a7b2;
+    border-radius: 7px;
+    transition: border-color 0.2s ease;
 }}
 
 div[data-testid="stFileUploaderDropzone"]:hover {{
     border-color: var(--lab-accent);
-    box-shadow: 0 12px 28px rgba(180,108,88,0.12);
-    transform: translateY(-1px);
 }}
 
 .stButton > button,
 .stDownloadButton > button {{
-    border-radius: 14px;
-    border: 1px solid rgba(207, 189, 172, 0.9);
-    background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(245,238,230,0.96) 100%);
+    border-radius: 7px;
+    border: 1px solid var(--lab-border);
+    background: #ffffff;
     color: var(--lab-text);
     font-weight: 600;
-    box-shadow: 0 8px 20px rgba(57, 47, 39, 0.06);
     padding-top: 0.5rem;
     padding-bottom: 0.5rem;
-    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    transition: border-color 0.18s ease;
 }}
 
 .stButton > button:hover,
 .stDownloadButton > button:hover {{
-    transform: translateY(-1px);
-    border-color: rgba(180,108,88,0.76);
-    box-shadow: 0 12px 24px rgba(57, 47, 39, 0.09);
+    border-color: var(--lab-accent);
 }}
 
 .stButton > button[kind="primary"] {{
-    background: linear-gradient(135deg, var(--lab-accent) 0%, var(--lab-accent-deep) 100%);
+    background: var(--lab-accent);
     color: white;
     border-color: transparent;
 }}
@@ -840,7 +711,7 @@ div[data-testid="stFileUploaderDropzone"]:hover {{
 div[data-baseweb="input"] input:focus,
 div[data-baseweb="select"] input:focus {{
     outline: none;
-    box-shadow: 0 0 0 4px rgba(180,108,88,0.18) !important;
+    box-shadow: 0 0 0 3px rgba(15,118,110,0.18) !important;
 }}
 
 .stButton > button:disabled {{
@@ -851,14 +722,14 @@ div[data-baseweb="input"] > div,
 div[data-baseweb="select"] > div,
 .stTextInput input,
 .stNumberInput input {{
-    border-radius: 14px !important;
-    border-color: rgba(207, 189, 172, 0.95) !important;
-    background: rgba(255,255,255,0.86) !important;
+    border-radius: 7px !important;
+    border-color: var(--lab-border) !important;
+    background: #ffffff !important;
 }}
 
 div[data-baseweb="input"] > div:hover,
 div[data-baseweb="select"] > div:hover {{
-    border-color: rgba(180,108,88,0.7) !important;
+    border-color: var(--lab-accent) !important;
 }}
 
 label[data-testid="stWidgetLabel"] p,
@@ -870,26 +741,25 @@ label[data-testid="stWidgetLabel"] p,
 }}
 
 div[data-testid="stExpander"] {{
-    border-radius: 18px;
-    border: 1px solid rgba(207, 189, 172, 0.86);
+    border-radius: 7px;
+    border: 1px solid var(--lab-border);
     overflow: hidden;
-    background: rgba(255,255,255,0.56);
+    background: #ffffff;
 }}
 
 div[data-testid="stExpander"] summary {{
-    background: linear-gradient(180deg, rgba(250,244,237,0.9) 0%, rgba(246,240,232,0.9) 100%);
+    background: #ffffff;
 }}
 
 div[data-testid="stAlert"] {{
-    border-radius: 18px;
+    border-radius: 7px;
     border-width: 1px;
 }}
 
 div[data-testid="stDataFrame"] {{
-    border-radius: 18px;
+    border-radius: 7px;
     overflow: hidden;
-    border: 1px solid rgba(207, 189, 172, 0.86);
-    box-shadow: var(--lab-shadow-soft);
+    border: 1px solid var(--lab-border);
 }}
 
 div[data-testid="stCaptionContainer"] p {{
@@ -898,24 +768,21 @@ div[data-testid="stCaptionContainer"] p {{
 }}
 
 iframe[title*="st_canvas"] {{
-    border-radius: 20px;
-    border: 1px solid rgba(207, 189, 172, 0.9);
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.8), var(--lab-shadow-soft);
-    background: rgba(255,255,255,0.7);
+    border-radius: 7px;
+    border: 1px solid var(--lab-border);
+    background: #ffffff;
 }}
 
 video {{
-    border-radius: 22px;
-    border: 1px solid rgba(207, 189, 172, 0.9);
-    box-shadow: var(--lab-shadow);
+    border-radius: 7px;
+    border: 1px solid var(--lab-border);
 }}
 
 .cpp-progress-card {{
-    border: 1px solid rgba(207, 189, 172, 0.86);
-    background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(250,245,239,0.92) 100%);
-    border-radius: 22px;
+    border: 1px solid var(--lab-border);
+    background: #ffffff;
+    border-radius: 7px;
     padding: 18px 18px 14px 18px;
-    box-shadow: var(--lab-shadow);
     margin: 0 0 1rem 0;
 }}
 
@@ -952,7 +819,7 @@ video {{
     position: relative;
     height: 18px;
     border-radius: 999px;
-    background: linear-gradient(90deg, #eee3d6 0%, #f4ece3 100%);
+    background: #e5eff2;
     overflow: visible;
     margin-bottom: 16px;
 }}
@@ -960,7 +827,7 @@ video {{
 .cpp-progress-fill {{
     height: 100%;
     border-radius: 999px;
-    background: linear-gradient(90deg, #d49a83 0%, #b46c58 52%, #8f5445 100%);
+    background: #0f766e;
     transition: width 0.2s ease;
 }}
 
@@ -1002,135 +869,6 @@ video {{
     margin: 0 0 4px 0;
 }}
 
-:root {{
-    --lab-border: #d5e1ea;
-    --lab-shadow: 0 18px 40px rgba(15, 36, 54, 0.08);
-    --lab-shadow-soft: 0 8px 24px rgba(15, 36, 54, 0.06);
-    --lab-text: #172a3a;
-    --lab-muted: #536879;
-    --lab-muted-soft: #718699;
-    --lab-accent: #0f766e;
-    --lab-accent-deep: #0b4f6c;
-}}
-
-.stApp {{
-    background:
-        radial-gradient(circle at top left, #ffffff 0%, rgba(246, 250, 252, 0.98) 32%, rgba(238, 245, 249, 0.96) 100%),
-        url("{lab_grid}");
-    background-size: auto, 240px 240px;
-}}
-
-div[data-testid="stVerticalBlockBorderWrapper"],
-.lab-sidebar-panel,
-.lab-results-card,
-div[data-testid="stMetric"],
-.cpp-progress-card {{
-    border-color: var(--lab-border);
-    background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248, 252, 254, 0.9) 100%);
-}}
-
-section[data-testid="stSidebar"] {{
-    background:
-        linear-gradient(180deg, rgba(248,252,254,0.98) 0%, rgba(239,247,250,0.98) 100%),
-        url("{lab_grid}");
-    border-right: 1px solid rgba(181, 202, 216, 0.72);
-}}
-
-.lab-hero {{
-    border-color: var(--lab-border);
-    background:
-        linear-gradient(140deg, rgba(255,255,255,0.96) 0%, rgba(244,250,252,0.95) 52%, rgba(232,244,247,0.94) 100%),
-        url("{lab_grid}");
-    box-shadow: 0 24px 56px rgba(15, 36, 54, 0.10);
-}}
-
-.lab-sidebar-kicker,
-.lab-hero__eyebrow {{
-    background: rgba(15, 118, 110, 0.11);
-    color: var(--lab-accent-deep);
-}}
-
-.lab-sidebar-note {{
-    background: rgba(15, 118, 110, 0.08);
-    border-color: rgba(15, 118, 110, 0.20);
-}}
-
-.lab-badge,
-.lab-hero__stat {{
-    border-color: var(--lab-border);
-    background: rgba(255,255,255,0.82);
-}}
-
-.lab-section-step {{
-    background: rgba(11, 79, 108, 0.10);
-    color: var(--lab-accent-deep);
-}}
-
-.lab-empty-state {{
-    border-color: var(--lab-border);
-    background: linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(246,250,252,0.94) 100%);
-}}
-
-div[data-testid="stFileUploaderDropzone"] {{
-    background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(241,248,251,0.98) 100%);
-    border-color: rgba(15, 118, 110, 0.48);
-}}
-
-div[data-testid="stFileUploaderDropzone"]:hover {{
-    box-shadow: 0 12px 28px rgba(15,118,110,0.12);
-}}
-
-.stButton > button,
-.stDownloadButton > button {{
-    border-color: var(--lab-border);
-    background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(239,247,250,0.98) 100%);
-    box-shadow: 0 8px 20px rgba(15, 36, 54, 0.06);
-}}
-
-.stButton > button:hover,
-.stDownloadButton > button:hover {{
-    border-color: rgba(15,118,110,0.62);
-    box-shadow: 0 12px 24px rgba(15, 36, 54, 0.09);
-}}
-
-.stButton > button[kind="primary"] {{
-    background: linear-gradient(135deg, #0f766e 0%, #0b4f6c 100%);
-}}
-
-.stButton > button:focus,
-.stDownloadButton > button:focus,
-div[data-baseweb="input"] input:focus,
-div[data-baseweb="select"] input:focus {{
-    box-shadow: 0 0 0 4px rgba(15,118,110,0.18) !important;
-}}
-
-div[data-baseweb="input"] > div,
-div[data-baseweb="select"] > div,
-.stTextInput input,
-.stNumberInput input {{
-    border-color: var(--lab-border) !important;
-    background: rgba(255,255,255,0.92) !important;
-}}
-
-div[data-baseweb="input"] > div:hover,
-div[data-baseweb="select"] > div:hover {{
-    border-color: rgba(15,118,110,0.58) !important;
-}}
-
-div[data-testid="stDataFrame"],
-iframe[title*="st_canvas"],
-video {{
-    border-color: var(--lab-border);
-}}
-
-.cpp-progress-track {{
-    background: linear-gradient(90deg, #dceaf1 0%, #eef6f9 100%);
-}}
-
-.cpp-progress-fill {{
-    background: linear-gradient(90deg, #4fb3aa 0%, #0f766e 52%, #0b4f6c 100%);
-}}
-
 /* Stronger CPP console redesign: squarer scientific panels, chamber motifs, and a darker header. */
 :root {{
     --cpp-bg: #f6fafc;
@@ -1151,9 +889,8 @@ video {{
 
 div[data-testid="stVerticalBlockBorderWrapper"] {{
     border-radius: 8px;
-    background:
-        linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(247,251,253,0.96) 100%);
-    box-shadow: 0 10px 24px rgba(15, 36, 54, 0.07);
+    background: #ffffff;
+    box-shadow: none;
     border-color: rgba(166, 190, 205, 0.88);
 }}
 
@@ -1170,76 +907,6 @@ iframe[title*="st_canvas"],
 video,
 div[data-testid="stExpander"] {{
     border-radius: 8px;
-}}
-
-.lab-hero {{
-    grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
-    align-items: stretch;
-    border-radius: 8px;
-    border: 1px solid rgba(91, 137, 160, 0.58);
-    padding: 1.2rem;
-    background:
-        linear-gradient(135deg, rgba(23, 42, 58, 0.98) 0%, rgba(11, 79, 108, 0.96) 58%, rgba(15, 118, 110, 0.88) 100%),
-        url("{lab_grid}");
-    box-shadow: 0 18px 42px rgba(15, 36, 54, 0.24);
-}}
-
-.lab-hero::after {{
-    opacity: 0.08;
-    filter: brightness(2.4) saturate(0.6);
-}}
-
-.lab-hero__eyebrow {{
-    border-radius: 4px;
-    background: rgba(255,255,255,0.12);
-    border: 1px solid rgba(220, 234, 241, 0.28);
-    color: #dceaf1;
-}}
-
-.lab-hero__title {{
-    color: #ffffff;
-    max-width: 16ch;
-    font-size: clamp(2.2rem, 3.4vw, 3.35rem);
-}}
-
-.lab-hero__copy {{
-    color: #dceaf1;
-    max-width: 58ch;
-}}
-
-.lab-badge {{
-    border-radius: 6px;
-    background: rgba(255,255,255,0.10);
-    border-color: rgba(220,234,241,0.25);
-    color: #f7fbfd;
-    box-shadow: none;
-}}
-
-.lab-hero__meta {{
-    display: grid;
-    grid-template-rows: minmax(190px, 1fr) auto;
-    gap: 0.85rem;
-}}
-
-.lab-hero__stat-grid {{
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.65rem;
-}}
-
-.lab-hero__stat {{
-    border-radius: 7px;
-    background: rgba(255,255,255,0.10);
-    border: 1px solid rgba(220,234,241,0.25);
-    box-shadow: none;
-}}
-
-.lab-hero__stat-label {{
-    color: rgba(220,234,241,0.78);
-}}
-
-.lab-hero__stat-value {{
-    color: #ffffff;
 }}
 
 .cpp-chamber-diagram {{
@@ -1337,8 +1004,7 @@ div[data-testid="stExpander"] {{
     border-radius: 0;
     border: 0;
     border-right: 1px solid rgba(213,225,234,0.92);
-    background:
-        linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(246,250,252,0.94) 100%);
+    background: #ffffff;
 }}
 
 .lab-workflow-step:last-child {{
@@ -1347,8 +1013,7 @@ div[data-testid="stExpander"] {{
 
 .lab-workflow-step--active {{
     box-shadow: inset 0 4px 0 #0f766e;
-    background:
-        linear-gradient(180deg, rgba(240,249,250,1) 0%, rgba(255,255,255,0.98) 100%);
+    background: #f3f9f9;
 }}
 
 .lab-workflow-step--complete {{
@@ -1392,8 +1057,7 @@ div[data-baseweb="select"] > div,
 
 .lab-empty-state {{
     border-style: solid;
-    background:
-        linear-gradient(90deg, rgba(255,255,255,0.98) 0%, rgba(247,251,253,0.96) 50%, rgba(232,244,247,0.94) 100%);
+    background: #ffffff;
 }}
 
 .cpp-instrument-header {{
@@ -1402,14 +1066,12 @@ div[data-baseweb="select"] > div,
     gap: 1rem;
     align-items: center;
     margin: 0 0 0.95rem 0;
-    padding: 0.92rem 1rem;
-    border: 1px solid var(--cpp-border);
-    border-left: 6px solid var(--cpp-primary);
-    border-radius: 8px;
-    background:
-        linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(244,250,252,0.98) 100%),
-        url("{lab_grid}");
-    box-shadow: 0 12px 28px rgba(15, 36, 54, 0.08);
+    padding: 0.65rem 0 0.85rem;
+    border: 0;
+    border-bottom: 1px solid var(--cpp-border);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
 }}
 
 .cpp-instrument-header__identity {{
@@ -1422,7 +1084,7 @@ div[data-baseweb="select"] > div,
 .cpp-instrument-header__title {{
     margin: 0;
     color: var(--cpp-text);
-    font-size: clamp(1.75rem, 2.6vw, 2.55rem);
+    font-size: clamp(1.75rem, 2.3vw, 2.3rem);
     line-height: 1;
 }}
 
@@ -1480,11 +1142,10 @@ div[data-baseweb="select"] > div,
 }}
 
 .cpp-readout {{
-    min-height: 68px;
-    padding: 0.62rem 0.7rem;
-    border: 1px solid rgba(166, 190, 205, 0.9);
-    border-radius: 7px;
-    background: rgba(255,255,255,0.78);
+    min-height: 52px;
+    padding: 0.35rem 0.6rem;
+    border-left: 1px solid var(--cpp-border);
+    background: transparent;
 }}
 
 .cpp-readout span {{
@@ -1583,23 +1244,22 @@ div[data-baseweb="select"] > div,
 }}
 
 .cpp-region-reference__cell--left {{
-    background: linear-gradient(180deg, rgba(235,99,71,0.16), rgba(255,255,255,0.90));
+    background: #f7eae7;
 }}
 
 .cpp-region-reference__cell--center {{
-    background: linear-gradient(180deg, rgba(56,162,140,0.18), rgba(255,255,255,0.90));
+    background: #eaf5f2;
 }}
 
 .cpp-region-reference__cell--right {{
-    background: linear-gradient(180deg, rgba(63,81,181,0.16), rgba(255,255,255,0.90));
+    background: #edf0f8;
 }}
 
 .cpp-creator-footer {{
     margin: 1.3rem 0 0 0;
-    padding: 1rem;
-    border: 1px solid var(--cpp-border);
-    border-radius: 8px;
-    background: rgba(255,255,255,0.74);
+    padding: 1rem 0;
+    border-top: 1px solid var(--cpp-border);
+    background: transparent;
     color: var(--cpp-muted);
     font-size: 0.92rem;
     line-height: 1.55;
@@ -1663,12 +1323,10 @@ div[data-baseweb="select"] > div,
 }}
 
 @media (max-width: 980px) {{
-    .lab-hero,
     .cpp-instrument-header,
     .lab-empty-state,
     .lab-results-strip,
     .lab-workflow-guide,
-    .lab-hero__stat-grid,
     .cpp-instrument-header__readouts,
     .lab-chamber-card-grid,
     .lab-export-checklist {{
@@ -1677,10 +1335,6 @@ div[data-baseweb="select"] > div,
 
     .cpp-creator-footer__inner {{
         grid-template-columns: 1fr;
-    }}
-
-    .lab-hero__title {{
-        max-width: none;
     }}
 
     .lab-workflow-guide::before {{
@@ -2257,7 +1911,7 @@ def render_rat_progress(
 
 
 def main() -> None:
-    st.set_page_config(page_title="CPP Rat Behavior Analyzer", layout="wide")
+    st.set_page_config(page_title="CPP Analyzer | Rat Behavior Analysis Suite", layout="wide")
     ensure_session_state()
     inject_visual_theme()
     render_sidebar_help()
@@ -2751,8 +2405,9 @@ def main() -> None:
 
 if __name__ == "__main__":
     from epm_ui import main as epm_main
+    from home_ui import render_home
 
-    st.navigation([
-        st.Page(main, title="CPP Analyzer", default=True),
-        st.Page(epm_main, title="EPM Analyzer", url_path="EPM_Analyzer"),
-    ]).run()
+    cpp_page = st.Page(main, title="CPP Analyzer", url_path="CPP_Analyzer")
+    epm_page = st.Page(epm_main, title="EPM Analyzer", url_path="EPM_Analyzer")
+    home_page = st.Page(lambda: render_home(cpp_page, epm_page), title="Home", default=True)
+    st.navigation([home_page, cpp_page, epm_page], expanded=True).run()

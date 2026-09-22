@@ -1,12 +1,14 @@
-# Three-Chamber CPP Rat Behavior Analyzer
+# Rat Behavior Analysis Suite
 
-Python and Streamlit app for analyzing single-rat behavior in a standard three-chamber conditioned place preference (CPP) apparatus from top-down or near top-down video.
+Python and Streamlit app with separate CPP and EPM analyzers for fixed-camera, single-rat recordings. The landing page lets users choose an assay; the sidebar links among Home, CPP Analyzer, and EPM Analyzer.
 
-The app is built for practical lab use: upload one video, draw the three chamber regions on the first frame, run tracking, and export chamber-time summaries, per-frame data, QC metrics, and an optional annotated video.
+The app is built for practical lab use: upload one video, map its assay regions, run tracking, and export summary tables, per-frame data, QC metrics, and an optional annotated video.
 
 ## Overview
 
-This project uses a lightweight classical computer vision pipeline rather than a deep-learning model. Tracking is based on motion segmentation, contour filtering, and temporal smoothing. Chamber occupancy can be scored using either a body-centered point or a front-of-body proxy, depending on the lab's operational definition.
+This project uses classical computer vision rather than a deep-learning model. CPP and EPM have separate tracking and scoring paths. CPP supports chamber scoring with a body-centered point or front-of-body proxy; EPM uses the smoothed body centroid and fixed entry dwell rules.
+
+The following sections describe CPP unless labeled EPM. The landing page and sidebar route to either tool.
 
 The current interface is intentionally opinionated:
 
@@ -343,16 +345,15 @@ If total time is inconsistent with the known session length, inspect the video F
 
 ## Elevated Plus Maze (EPM) section
 
-The EPM analyzer is a separate page in the same Streamlit app. Keep launching
-the existing site with `streamlit run app.py`, then select **CPP Analyzer** or
-**EPM Analyzer** in the sidebar. Each section has its own quick guide and changelog.
+The EPM analyzer is a separate page in the same Streamlit app. Launch with
+`streamlit run app.py`, choose a tool on Home, or use the sidebar to switch.
+Each analyzer has its own quick guide and changelog.
 The original CPP workflow and its output files are unchanged.
 
 ### EPM workflow
 
-1. Upload one fixed-camera EPM video. Check its FPS and duration. The analysis
-   interval defaults to the entire recording; set start/end only when a
-   reviewed setup/removal interval justifies trimming. The bounds are exported.
+1. Upload one fixed-camera EPM video. The entire recording is scored using
+   its embedded FPS. Both values are exported with the settings.
 2. Load a prior `calibration_and_settings.json` from this exact recording, or
    choose a clear calibration frame (the first frame may show the experimenter),
    then left-click the corners of each of five walking-surface polygons and
@@ -362,11 +363,10 @@ The original CPP workflow and its output files are unchanged.
 3. Map the numbered polygons to **center**, **open arm 1**, **open arm 2**,
    **closed arm 1**, and **closed arm 2**. Confirm the labeled overlay. The app
    rejects substantial region overlaps and arms that do not meet the center.
-4. The pilot defaults to a **smoothed body centroid** for provisional entry
-   crossings. Raw centroid and a motion-derived front-of-body proxy remain
-   labeled options for review; none detects head keypoints or paws. The default
-   arm dwell is fixed at 1.0 second and center dwell at 0.1 second. Review
-   whether the initial arm should count as an entry.
+4. EPM scoring uses the **smoothed body centroid** for provisional entry
+   crossings; it does not detect head keypoints or paws. Arm dwell is fixed
+   at 0.5 seconds and center dwell at 0.1 seconds. Review whether the initial
+   arm should count as an entry. The calibration-frame time remains adjustable.
 5. Run analysis. Review QC warnings, the event table, and the annotated MP4
    before using results.
 
@@ -384,7 +384,7 @@ remains unclassified. The CPP tracker and scoring path are unchanged.
 
 An open or closed arm entry is a confirmed transition from center into that
 arm. A return from an arm into center is a center entry. Consecutive frames in
-one arm count once. An arm visit shorter than 1 second is center time and
+one arm count once. An arm visit shorter than 0.5 seconds is center time and
 creates neither an arm entry nor a return entry. A center stay of at least
 0.1 second can count as a center entry. Inferred frames carry method and
 uncertainty flags; physically plausible short interpolations may support
