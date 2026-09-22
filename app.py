@@ -402,7 +402,7 @@ section[data-testid="stSidebar"] .block-container {{
     grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.8fr);
     gap: 1.4rem;
     align-items: center;
-    padding: 1rem 0;
+    padding: 1rem 1.2rem;
     border-radius: 0;
     border-top: 1px solid var(--lab-border);
     background: #ffffff;

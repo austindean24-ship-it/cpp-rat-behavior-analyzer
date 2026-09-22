@@ -276,13 +276,6 @@ def main() -> None:
     inject_epm_visual_theme()
     _render_epm_sidebar()
     render_epm_hero()
-    st.info(
-        "Body time and entries use the smoothed body centroid. "
-        "A return from an arm into center counts as a center entry. "
-        "A stable arm occupied at the start can count as one initial entry. "
-        "Arm entries require 0.5 seconds; center entries require 0.1 second. Brief arm peeks count as center time. "
-        "Missing body positions are inferred from neighboring frames and flagged for review."
-    )
 
     with st.container(border=True):
         st.subheader("1 · Upload video")

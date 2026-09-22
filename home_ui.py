@@ -49,6 +49,9 @@ def render_home(cpp_page, epm_page) -> None:
 .suite-hero p {{font-size:.98rem;color:#516B77;line-height:1.55;max-width:46rem;margin:0}}
 .suite-section {{color:#173645;font-size:1.28rem;font-weight:750;margin:.2rem 0 .25rem}}
 .suite-muted {{color:#617B86;font-size:.91rem;margin-bottom:1.1rem}}
+.suite-card {{display:block;height:100%;padding:1rem;border:1px solid #D5E1EA;border-radius:7px;background:#FFF;text-decoration:none!important;color:inherit!important;cursor:pointer;transition:border-color .15s ease,background-color .15s ease}}
+.suite-card:hover,.suite-card:focus-visible {{border-color:#277B79;background:#F7FBFB;outline:none}}
+.suite-card:focus-visible {{box-shadow:0 0 0 3px rgba(39,123,121,.2)}}
 .suite-card-art {{height:155px;background:#FFFFFF no-repeat center/contain;margin-bottom:.65rem}}
 .suite-card-art--cpp {{background-image:url('{CPP_ART}')}}
 .suite-card-art--epm {{background-image:url('{EPM_ART}')}}
@@ -69,21 +72,21 @@ def render_home(cpp_page, epm_page) -> None:
 
     cpp_col, epm_col = st.columns(2, gap="large")
     with cpp_col:
-        with st.container(border=True):
-            st.markdown("""
+        st.markdown("""
+<a class="suite-card" href="/CPP_Analyzer" target="_self" aria-label="Go to CPP Analyzer">
 <div class="suite-card-art suite-card-art--cpp" role="img" aria-label="Three-chamber place preference apparatus"></div>
 <div class="suite-card-kicker">Three-chamber assay</div>
 <div class="suite-card-title">CPP Analyzer</div>
 <div class="suite-card-copy">Score chamber occupancy and transitions in a conditioned place preference recording. Review the trajectory, quality checks, and video overlay.</div>
+</a>
 """, unsafe_allow_html=True)
-            st.page_link(cpp_page, label="Open CPP Analyzer", use_container_width=True)
     with epm_col:
-        with st.container(border=True):
-            st.markdown("""
+        st.markdown("""
+<a class="suite-card" href="/EPM_Analyzer" target="_self" aria-label="Go to EPM Analyzer">
 <div class="suite-card-art suite-card-art--epm" role="img" aria-label="Five-region elevated plus maze apparatus"></div>
 <div class="suite-card-kicker">Five-region assay</div>
 <div class="suite-card-title">EPM Analyzer</div>
 <div class="suite-card-copy">Measure open-arm, closed-arm, and center time with provisional entries. Inspect inferred positions and flagged events against the video.</div>
+</a>
 """, unsafe_allow_html=True)
-            st.page_link(epm_page, label="Open EPM Analyzer", use_container_width=True)
     st.markdown('<div class="suite-footnote">Use the sidebar to move between Home, CPP Analyzer, and EPM Analyzer at any time.</div>', unsafe_allow_html=True)
